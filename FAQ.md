@@ -3,14 +3,14 @@
 Для упрощения жизни и атмосферы в чатике - ответы на некоторые популярные вопросы вынесены сюда. 
 
 
-### Q: Запускается глобальный `pip`/`mypy`/`flake8`, а не из `shad_env`
+### Q: Запускается глобальный `pip`/`pyrefly`/`ruff`, а не из окружения
 
 <details><summary><b>A: [под спойлером]</b></summary>
 Для начала нужно проверить какой именно (откуда) пакет вы запускайте 
 
 ```shell
-# на примере `mypy`
-$ which mypy
+# на примере `pyrefly`
+(shad_env)$ which pyrefly
 # [some path here]
 ```
 
@@ -26,8 +26,8 @@ $ source shad_env/bin/activate  # замените здесь путь до ме
 
 Проверьте ещё раз
 ```shell
-# на примере `mypy`
-(shad_env)$ which mypy
+# на примере `pyrefly`
+(shad_env)$ which pyrefly
 # [some path here]
 ```
 
@@ -36,14 +36,14 @@ $ source shad_env/bin/activate  # замените здесь путь до ме
 Самый надежный способ запуска пакеты именно для конкретного питона - вызвать его как модуль
 ```shell
 (shad_env)$ which python
-(shad_env)$ python -m mypy
+(shad_env)$ python -m ruff --version
 ```
 (при уже включённом `venv`)
 
 </details>
 
 
-### Q: Локально проходят все тесты, а на сервере ошибка `flake8`/`mypy`
+### Q: Локально проходят все тесты, а на сервере ошибка `ruff`/`pyrefly`
 
 <details><summary><b>A: [под спойлером]</b></summary>
 В первую очередь нужно проверить, что вы запускайте тесты и линтеры с учётом файла конфигурации (`pyproject.toml`).  
@@ -51,14 +51,14 @@ $ source shad_env/bin/activate  # замените здесь путь до ме
 Есть 2 варианта как запустить тесты и линтеры 
 * Можно запускать из корня проекта, тогда файл подцепится автоматически
   ```shell
-  (shad_env)$ python -m flake8 ./path/to/the/task
-  (shad_env)$ python -m mypy ./path/to/the/task
+  (shad_env)$ python -m ruff check ./path/to/the/task
+  (shad_env)$ pyrefly check ./path/to/the/task
   (shad_env)$ python -m pytest ./path/to/the/task
   ```
 * Можно запускать из любой директории, но нужно указать файл ручками
   ```shell
-  (shad_env)$ python -m flake8 --config ../../pyproject.toml task_name
-  (shad_env)$ python -m mypy --config-file ../../pyproject.toml task_name
+  (shad_env)$ python -m ruff --config ../../pyproject.toml check task_name
+  (shad_env)$ pyrefly check task_name
   (shad_env)$ python -m pytest -c ../../pyproject.toml task_name
   ```
 (при уже включённом `venv`)
@@ -108,8 +108,8 @@ $ git push origin main
 
 Вы уже устанавливали её по время SETUP. Но в случае возникновения ошибок можно её переустановить
 ```shell
-(shad_env)$ python -m pip upinstall testlib
-(shad_env)$ python -m pip install --editable tools/testlib
+(shad_env)$ uv pip uninstall testlib
+(shad_env)$ uv pip install --editable tools/testlib
 ```
 (при уже включённом `venv`)
 </details>
@@ -126,8 +126,8 @@ $ git push origin main
 
 В этом случае удалите старую и установите ЛОКАЛЬНУЮ библиотеку:
 ```shell
-(shad_env)$ python -m pip upinstall testlib
-(shad_env)$ python -m pip install --editable tools/testlib
+(shad_env)$ uv pip uninstall testlib
+(shad_env)$ uv pip install --editable tools/testlib
 ```
 (при уже включённом `venv`)
 </details>

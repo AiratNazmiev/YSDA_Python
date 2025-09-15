@@ -1,5 +1,5 @@
 variables:
-  GIT_DEPTH: 1
+  GIT_DEPTH: 10
   GIT_STRATEGY: clone
   REGISTRY: gitlab.manytask.org:5050/python/public-2025-fall
 
@@ -20,8 +20,12 @@ grade:
       when: manual
     - when: on_success
   script:
-    - cd /opt/shad/
-    - python3 -m checker grade
+    - cp /opt/shad/.checker.yml $CI_PROJECT_DIR
+    - cp /opt/shad/.manytask.yml $CI_PROJECT_DIR
+    - python -m checker grade
+      --username $GITLAB_USER_LOGIN
+      --submit-score
+      -- $CI_PROJECT_DIR $REF_DIR
 
 
 # Checking contribution to the main repo
