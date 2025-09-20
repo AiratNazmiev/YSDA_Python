@@ -42,7 +42,7 @@ def test_fractional_ctr_assert() -> None:
         test_check_ctr(1, 2, 0.5)
 
 
-def test_ctr_greater_then_one_assert() -> None:
+def test_ctr_greater_than_one_assert() -> None:
     with pytest.raises(AssertionError, match="Wrong ctr calculation"):
         test_check_ctr(10, 5, 1.0)
 

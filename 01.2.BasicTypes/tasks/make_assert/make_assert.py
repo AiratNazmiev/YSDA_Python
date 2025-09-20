@@ -13,7 +13,7 @@ def ctr(clicks: int, shows: int) -> float:
     :param shows: number of banners shows
     :return: clicks-through rate.
              If there are no shows, return 0.0
-             If clicks greater then shows, return 1
+             If clicks greater than shows, return 1
     """
     return clicks // shows if shows > 0 else 0
 
