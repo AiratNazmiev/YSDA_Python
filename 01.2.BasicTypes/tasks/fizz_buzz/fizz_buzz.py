@@ -10,13 +10,13 @@ def get_fizz_buzz(n: int) -> list[int | str]:
    result = []
    for num in range(1, n + 1):
       if num % 15 == 0:
-         result.append(num)
+         result.append("FizzBuzz")
          continue
       if num % 5 == 0:
-         result.append(num)
+         result.append("Buzz")
          continue
       if num % 3 == 0:
-         result.append(num)
+         result.append("Fizz")
          continue
       result.append(num)
 
