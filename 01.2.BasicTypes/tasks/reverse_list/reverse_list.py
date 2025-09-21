@@ -4,6 +4,11 @@ def reverse_iterative(lst: list[int]) -> list[int]:
     :param lst: input list
     :return: reversed list
     """
+    new_lst = []
+    for idx in range(len(lst) - 1, -1, -1):
+        new_lst.append(lst[idx])
+
+    return new_lst
 
 
 def reverse_inplace_iterative(lst: list[int]) -> None:
@@ -12,6 +17,9 @@ def reverse_inplace_iterative(lst: list[int]) -> None:
     :param lst: input list
     :return: None
     """
+    len_lst = len(lst)
+    for idx in range(len_lst // 2):
+        lst[idx], lst[len_lst - idx - 1] = lst[len_lst - idx - 1], lst[idx]
 
 
 def reverse_inplace(lst: list[int]) -> None:
@@ -20,6 +28,7 @@ def reverse_inplace(lst: list[int]) -> None:
     :param lst: input list
     :return: None
     """
+    lst.reverse()
 
 
 def reverse_reversed(lst: list[int]) -> list[int]:
@@ -28,6 +37,7 @@ def reverse_reversed(lst: list[int]) -> list[int]:
     :param lst: input list
     :return: reversed list
     """
+    return list(reversed(lst))
 
 
 def reverse_slice(lst: list[int]) -> list[int]:
@@ -36,3 +46,4 @@ def reverse_slice(lst: list[int]) -> list[int]:
     :param lst: input list
     :return: reversed list
     """
+    return lst[::-1]
