@@ -2,7 +2,7 @@ variables:
   GIT_DEPTH: 10
   GIT_STRATEGY: clone
   REGISTRY: gitlab.manytask.org:5050/python/public-2025-fall
-
+  REF_DIR: /opt/shad
 
 # Testing and Grading all changed tasks
 grade:
@@ -38,6 +38,9 @@ check:
       when: on_success
     - when: never
   script:
-    - cp -R /opt/shad/tests tests/
-    - python3 -m checker --config /opt/shad/.course.yml check --contributing
+    - echo "Using reference dir = ${REF_DIR:-/opt/shad}"
+    - '[ -d "${REF_DIR:-/opt/shad}" ] || { echo "ERROR: Reference dir ${REF_DIR:-/opt/shad} not found in image" >&2; exit 1; }'
+    - cp "${REF_DIR:-/opt/shad}/.checker.yml" "$CI_PROJECT_DIR"
+    - cp "${REF_DIR:-/opt/shad}/.manytask.yml" "$CI_PROJECT_DIR"
+    - python -m checker grade -- "$CI_PROJECT_DIR" "${REF_DIR:-/opt/shad}"
   timeout: 30 minutes
