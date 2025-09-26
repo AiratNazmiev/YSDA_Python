@@ -31,6 +31,8 @@ grade:
 # Checking contribution to the main repo
 check:
   image: $REGISTRY/testenv:latest
+  variables:
+    GIT_DEPTH: "0"  # full history so merge-base works
   rules:
     - if: $CI_PROJECT_NAME =~ /^public-(fall|spring)-20\d\d/
       when: never
@@ -40,7 +42,55 @@ check:
   script:
     - echo "Using reference dir = ${REF_DIR:-/opt/shad}"
     - '[ -d "${REF_DIR:-/opt/shad}" ] || { echo "ERROR: Reference dir ${REF_DIR:-/opt/shad} not found in image" >&2; exit 1; }'
-    - cp "${REF_DIR:-/opt/shad}/.checker.yml" "$CI_PROJECT_DIR"
-    - cp "${REF_DIR:-/opt/shad}/.manytask.yml" "$CI_PROJECT_DIR"
-    - python -m checker grade -- "$CI_PROJECT_DIR" "${REF_DIR:-/opt/shad}"
+    - |
+      set -euo pipefail
+
+      # Determine diff base (prefer GitLab-provided SHA)
+      if [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
+        BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}"
+        if [ -z "$BASE" ]; then
+          # Fallback: ensure remote target exists locally, then use three-dot
+          git fetch --no-tags --prune origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+          BASE="origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+        fi
+        CHANGED=$(git diff --name-only "${BASE}...$CI_COMMIT_SHA" || true)
+      else
+        # Not an MR: fallback to last commit
+        CHANGED=$(git diff --name-only "HEAD~1" || true)
+      fi
+
+      echo "Changed files:"
+      echo "$CHANGED"
+
+      # Extract task names from */tasks/<task_name>/**
+      TASKS=$(echo "$CHANGED" | sed -n 's#.*/tasks/\([^/]*\)/.*#\1#p' | sort -u)
+      if [ -z "${TASKS:-}" ]; then
+        echo "No task changes detected; nothing to run."
+        exit 0
+      fi
+      echo "Changed tasks: $TASKS"
+
+      # Build working copy of the tutor repo (gold solutions + tutor tests)
+      WORKDIR=$(mktemp -d)
+      cp -a "${REF_DIR:-/opt/shad}/." "$WORKDIR/"
+
+      # Overlay only changed test files from student repo into the working copy
+      echo "$CHANGED" | while IFS= read -r rel; do
+        case "$rel" in
+          */tasks/*/test_*|*/tasks/*/tests/*|tests/*)
+            src="$CI_PROJECT_DIR/$rel"
+            dst="$WORKDIR/$rel"
+            if [ -f "$src" ]; then
+              mkdir -p "$(dirname "$dst")"
+              cp -f "$src" "$dst"
+              echo "Overlay: $rel"
+            fi
+            ;;
+        esac
+      done
+
+      # Run checker against the working copy; limit to changed tasks
+      ARGS=$(printf ' -t %s' $TASKS)
+      echo "Running: checker check$ARGS -- \"$WORKDIR\" \"$WORKDIR\""
+      python -m checker check $ARGS -- "$WORKDIR" "$WORKDIR"
   timeout: 30 minutes
