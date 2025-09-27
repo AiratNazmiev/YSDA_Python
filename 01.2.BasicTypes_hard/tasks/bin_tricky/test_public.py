@@ -6,18 +6,21 @@ import pytest
 import testlib
 
 from bin_tricky import find_median
+from collections.abc import Sequence
+
 
 
 @dataclasses.dataclass
 class Case:
-    nums1: list[int]
-    nums2: list[int]
+    nums1: Sequence[int]
+    nums2: Sequence[int]
+    expected_result: float | None = None
 
     def __str__(self) -> str:
         return 'find_median_in_{}_and_{}'.format(self.nums1, self.nums2)
 
 
-BIG_VALUE = 10**5
+BIG_VALUE = 10**15
 
 
 def get_range_with_peak_on_position(range_size: int, position: int) -> list[int]:
@@ -29,6 +32,7 @@ def get_range_with_peak_on_position(range_size: int, position: int) -> list[int]
 
 TEST_CASES = [
     Case(nums1=[1], nums2=[2]),
+    Case(nums1=[2], nums2=[1]),
     Case(nums1=[], nums2=[2]),
     Case(nums1=[1], nums2=[]),
     Case(nums1=[1, 2], nums2=[]),
@@ -39,8 +43,12 @@ TEST_CASES = [
     Case(nums1=[1, 2],  nums2=[1, 2]),
     Case(nums1=[1, 1], nums2=[1, 1]),
     Case(nums1=[1, 3], nums2=[2]),
+    Case(nums1=[2], nums2=[1, 3]),
     Case(nums1=[2], nums2=[1, 3, 4]),
     Case(nums1=[3], nums2=[1, 2, 4]),
+    Case(nums1=[1, 3], nums2=[2]),
+    Case(nums1=[1, 3, 4], nums2=[2]),
+    Case(nums1=[1, 2, 4], nums2=[3]),
     Case(nums1=[2, 6], nums2=[3, 4]),
     Case(nums1=[1, 2, 2, 2, 3, 4, 5], nums2=[1, 2, 6, 7, 8, 8, 9]),
     Case(nums1=[1, 2, 2, 2, 3, 4, 5], nums2=[1, 2, 6]),
@@ -59,10 +67,16 @@ TEST_CASES = [
     Case(nums1=[1, 2], nums2=[3]),
     Case(nums1=[1], nums2=[2, 3]),
     Case(nums1=[1, 2], nums2=[3, 4]),
+    Case(nums1=[1, 2], nums2=[3, 4, 5]),
     Case(nums1=[3, 4, 5], nums2=[1]),
     Case(nums1=[3, 4, 5, 6, 7, 8], nums2=[1, 2]),
     Case(nums1=[1, 1, 2, 5, 6], nums2=[1, 9, 10]),
     Case(nums1=list(range(0, 100, 2)), nums2=list(range(-100, 100, 5))),
+    Case(nums1=range(0, BIG_VALUE + 1), nums2=[], expected_result=BIG_VALUE / 2),
+    Case(nums1=range(0, BIG_VALUE), nums2=[], expected_result=(BIG_VALUE - 1) / 2),
+    Case(nums1=range(0, BIG_VALUE, 2), nums2=range(0, BIG_VALUE, 5), expected_result=BIG_VALUE / 2 - 1),
+    Case(nums1=range(0, BIG_VALUE + 1, 2), nums2=range(0, BIG_VALUE + 1, 5), expected_result=BIG_VALUE / 2),
+    Case(nums1=range(0, BIG_VALUE + 1, 2), nums2=range(0, BIG_VALUE * 10, 5), expected_result=BIG_VALUE/4*15 - 5),
 ]
 
 
@@ -87,10 +101,12 @@ def test_docs() -> None:
 ###################
 
 
-def dummy_implementation(nums1: list[int], nums2: list[int]) -> float:
-    combined_nums = sorted(nums1 + nums2)
-    m = len(nums1)
-    n = len(nums2)
+def dummy_implementation(nums1: Sequence[int], nums2: Sequence[int]) -> float:
+    nums1_list = list(nums1)
+    nums2_list = list(nums2)
+    combined_nums = sorted(nums1_list + nums2_list)
+    m = len(nums1_list)
+    n = len(nums2_list)
     return (combined_nums[(m + n) // 2] + combined_nums[(m + n - 1) // 2]) / 2
 
 
@@ -104,7 +120,7 @@ def test_find_value(t: Case) -> None:
 
     assert nums1_copy == t.nums1 and nums2_copy == t.nums2, "You shouldn't change input"
 
-    ground_truth = dummy_implementation(t.nums1, t.nums2)
+    ground_truth = dummy_implementation(t.nums1, t.nums2) if t.expected_result is None else t.expected_result
 
     assert answer == ground_truth
 
