@@ -9,7 +9,7 @@
 
 ### Создаём issue 
 Если ну никак не получается придумать решение ошибки или новую задачку, то 
-1. Заходим [public repo](https://gitlab.manytask.org/python/public-2024-fall) -> Issues 
+1. Заходим [public repo](https://gitlab.manytask.org/python/public-2025-fall) -> Issues 
 2. New issue 
 3. Оформляем - описываем проблему или идею, приводим примеры, объясняем тонкие моменты и тд.
 
@@ -38,7 +38,7 @@ git push origin <your-contributing-branch-name>
 ```
 5. Зайдите в свой репозиторий на [gitlab.manytask.org](gitlab.manytask.org), нажмите слева на панели `Merge Requests -> New merge request`
 6. Выберите `source branch`: имя вашего репозитория + имя вашей ветки <your-contributing-branch-name>
-7. Выберите `target branch`: python/public-2024-fall + main
+7. Выберите `target branch`: python/public-2025-fall + main
 8. Нажмите `Compare branches and continue`
 9. Задайте название и описание вашего реквеста. Внизу страницы посмотрите изменения (вкладка Changes), если все ок, то жмите `Submit merge request`
 
