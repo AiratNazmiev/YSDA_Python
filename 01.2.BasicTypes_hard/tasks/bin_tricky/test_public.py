@@ -124,5 +124,5 @@ def test_find_value(t: Case) -> None:
 
     assert answer == ground_truth
 
-    swapped_args_answer = find_median(t.nums1, t.nums2)
+    swapped_args_answer = find_median(t.nums2, t.nums1)
     assert swapped_args_answer == ground_truth, "You should get the same result if you swap the arguments"
