@@ -76,6 +76,8 @@ TEST_CASES = [
 
 def test_banned_modules() -> None:
     assert not testlib.is_module_imported('bisect', Path(__file__).parent / 'bin_basic.py')
+    assert not testlib.is_bytecode_op_used(find_value, 'CONTAINS_OP'), \
+        "You, don't even dare to use `in`! It's plainly illegal, you got that?!"
 
 
 def test_docs() -> None:
