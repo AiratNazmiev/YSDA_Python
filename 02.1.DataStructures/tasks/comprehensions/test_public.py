@@ -113,6 +113,8 @@ TEST_RECORDS: list[tp.Mapping[str, tp.Any]] = [
      "DeviceType": "Firefox"},
     {"EventID": 15789, "EventTime": 1568839219, "UserID": 12399, "PageID": 221, "RegionID": 20,
      "DeviceType": "Internet Explorer"},
+    {"EventID": 25647, "EventTime": 1568839217, "UserID": 12340, "PageID": 112, "RegionID": 10,
+     "DeviceType": "Safari"},
 ]
 
 
@@ -161,7 +163,7 @@ def test_get_region_ids_with_none_replaces_by_default() -> None:
     result = comp.get_region_ids_with_none_replaces_by_default(test_records)
 
     assert test_records == TEST_RECORDS, "You shouldn't change inputs"
-    assert result == [100500, 100500, 100500, 10, 0, 20]
+    assert result == [100500, 100500, 100500, 10, 0, 20, 10]
 
 
 def test_get_region_id_if_not_none() -> None:
@@ -169,7 +171,7 @@ def test_get_region_id_if_not_none() -> None:
     result = comp.get_region_id_if_not_none(test_records)
 
     assert test_records == TEST_RECORDS, "You shouldn't change inputs"
-    assert result == [10, 0, 20]
+    assert result == [10, 0, 20, 10]
 
 
 def test_get_keys_where_value_is_not_none() -> None:
