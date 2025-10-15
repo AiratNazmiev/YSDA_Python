@@ -15,3 +15,18 @@ def input_(prompt: str | None = None,
     `inp` and `out` arguments are optional and should default to `sys.stdin`
     and `sys.stdout` respectively.
     """
+    if inp is None:
+        inp = sys.stdin
+    if out is None:
+        out = sys.stdout
+
+    if prompt is not None:
+        out.write(prompt)
+        out.flush()
+
+    line = inp.readline()
+    if line == "":
+        return None
+    if line.endswith("\n"):
+        line = line[:-1]
+    return line
