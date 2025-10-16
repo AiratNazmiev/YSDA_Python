@@ -46,6 +46,7 @@ dependencies = [
     # types
     "types-requests==2.32.0.20240907",
     "polars>=1.33.1",
+    "cyclopts>=3.24.0",
 ]
 
 [tool.pytest.ini_options]
@@ -68,6 +69,10 @@ target-version = "py313"
 # McCabe complexity (`C901`) by default.
 lint.select = ["E", "F", "W"]
 lint.ignore = []
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+lint.fixable = ["ALL"]
+lint.unfixable = []
 
 exclude = [
     ".bzr",
@@ -95,10 +100,6 @@ exclude = [
     "tests",
     ".tmp"
 ]
-
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-lint.fixable = ["ALL"]
-lint.unfixable = []
 
 line-length = 120
 
