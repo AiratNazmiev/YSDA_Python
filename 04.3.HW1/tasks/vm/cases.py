@@ -3765,6 +3765,23 @@ foo(2)
 print(foo.calls)
 """,
     ),
+    Case(
+        name="unpacking_exception",
+        text_code=r"""
+values = (1, 2, 3, 4, 5)
+a, b, c, d = values
+""",
+    ),
+    Case(
+        name="dict_merge_exception",
+        text_code=r"""
+def foo(**kwargs):
+    print(137)
+a = {"key": "some value"}
+b = {"key": "oh no, duplicate"}
+foo(**a, **b)
+""",
+    ),
 ]
 
 PYTHON_3_8_NEW_CASES = [
