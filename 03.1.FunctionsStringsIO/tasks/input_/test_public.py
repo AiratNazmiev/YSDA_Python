@@ -12,6 +12,7 @@ from input_ import input_
     ('>> ', 'The quick brown fox jumps over the lazy dog.'),
     ('>>> ', 'Dear John'),
     ('', "    'whitespace'  "),
+    ('Press <Enter>: ', ''),
 ])
 def test_basic(prompt: str, user_input: str) -> None:
     inp = io.StringIO(user_input + '\n')
