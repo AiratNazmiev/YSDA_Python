@@ -9,15 +9,13 @@ def run_calc(context: dict[str, Any] | None = None) -> None:
     """Run interactive calculator session in specified namespace"""
     context = {'__builtins__': {}} if context is None else context
     while True:
-        sys.stdout.write(PROMPT)
+        print(PROMPT, flush=True, end='')
         data = sys.stdin.readline()
         if data:
-            sys.stdout.write(f"{str(eval(data, context))}\n")
+            print(str(eval(data, context)))
         else:
+            print()
             break
-
-    sys.stdout.write('\n')
-
 
 if __name__ == '__main__':
     context = {'math': math}

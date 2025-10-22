@@ -13,20 +13,25 @@ def profiler(func):  # type: ignore
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if wrapper._depth == 0:
-            wrapper.calls = 1
-        else:
-            wrapper.calls += 1
+        is_outer = wrapper._depth == 0
+        if is_outer:
+            wrapper.calls = 0
+            wrapper._start_time = datetime.now()
+
         wrapper._depth += 1
-        start_time = datetime.now()
+        wrapper.calls += 1
         result = func(*args, **kwargs)
-        end_time = datetime.now()
-        wrapper.last_time_taken = (end_time - start_time).total_seconds()
         wrapper._depth -= 1
+
+        if is_outer:
+            end_time = datetime.now()
+            wrapper.last_time_taken = (end_time - wrapper._start_time).total_seconds()
+
         return result
 
     wrapper.calls = 0
     wrapper.last_time_taken = 0.
     wrapper._depth = 0
+    wrapper._start_time = 0.
 
     return wrapper
