@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from collections import OrderedDict
 import functools
 import typing as tp
