@@ -65,4 +65,7 @@ class RunPytestPlugin(RunScriptPlugin):
                     full = float(m_full.group(1))
                     if full > 0:
                         result.percentage = score_val / full
+            else:
+                result.percentage = 0
+                
         return result
