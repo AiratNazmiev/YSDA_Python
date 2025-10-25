@@ -20,8 +20,11 @@ grade:
       when: manual
     - when: on_success
   script:
-    - cp /opt/shad/.checker.yml $CI_PROJECT_DIR
-    - cp /opt/shad/.manytask.yml $CI_PROJECT_DIR
+    # Replace the files needed from CI from private files with the teacher's repo 
+    # TODO: check if these CP-s can actually be removed? These files might be already copied elsewhere
+    - cp /opt/shad/tools/plugins/run_pytest.py $CI_PROJECT_DIR/tools/plugins/run_pytest.py
+    - cp /opt/shad/.checker.yml "$CI_PROJECT_DIR"
+    - cp /opt/shad/.manytask.yml "$CI_PROJECT_DIR"
     - python -m checker grade
       --username $GITLAB_USER_LOGIN
       --submit-score
