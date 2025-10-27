@@ -81,8 +81,15 @@ class Frame:
         Operation description:
             https://docs.python.org/release/3.13.7/library/dis.html#opcode-LOAD_NAME
         """
-        # TODO: parse all scopes
-        self.push(self.locals[arg])
+        if arg in self.locals:
+            self.push(self.locals[arg])
+        elif arg in self.globals:
+            self.push(self.globals[arg])
+        elif arg in self.builtins:
+            self.push(self.builtins[arg])
+        else:
+            raise NameError(f"Name {arg} is not defined")
+            
 
     def load_global_op(self, arg: str) -> None:
         """
@@ -106,6 +113,13 @@ class Frame:
             https://docs.python.org/release/3.13.7/library/dis.html#opcode-RETURN_VALUE
         """
         self.return_value = self.pop()
+    
+    def return_const_op(self, arg: tp.Any) -> None:
+        """
+        Operation description:
+            https://docs.python.org/release/3.13.7/library/dis.html#opcode-RETURN_VALUE
+        """
+        self.return_value = arg
 
     def pop_top_op(self, arg: tp.Any) -> None:
         """
@@ -142,7 +156,56 @@ class Frame:
         """
         const = self.pop()
         self.locals[arg] = const
-
+        
+    # def build_list_op(self, count: int) -> None:
+    #     elts = self.popn(count)
+    #     self.push(elts)
+    
+    # def list_extend_op(self, i: int) -> None:
+    #     tos = self.pop()
+    #     tos1 = self.pop()
+    #     if len(tos1) == 0:
+    #         list.extend(tos1, tos)
+    #     else:
+    #         list.extend(tos1, tos)
+    #     self.push(tos1)
+        
+    # def build_tuple_op(self, size: int) -> None:
+    #     buf = []
+    #     for i in range(size):
+    #         tos = self.pop()
+    #         buf.append(tos)
+    #     self.push(tuple(buf))
+        
+    # def build_slice_op(self, argc: int) -> None:
+    #     if argc == 2:
+    #         tos = self.pop()
+    #         tos1 = self.pop()
+    #         self.push(slice(tos1, tos))
+    #     if argc == 3:
+    #         tos = self.pop()
+    #         tos1 = self.pop()
+    #         tos2 = self.pop()
+    #         self.push(slice(tos2, tos1, tos))
+            
+    # def binary_subscr_op(self, arg: tp.Any) -> None:
+    #     tos = self.pop()
+    #     tos1 = self.pop()
+    #     self.push(tos1[tos])
+        
+    # def compare_op_op(self, op: str) -> None:
+    #     a, b = self.popn(2)
+    #     co = {
+    #         "<": lambda x, y: x < y,
+    #         "<=": lambda x, y: x <= y,
+    #         "==": lambda x, y: x == y,
+    #         "!=": lambda x, y: x != y,
+    #         ">": lambda x, y: x > y,
+    #         ">=": lambda x, y: x >= y,
+    #     }
+    #     if op not in co:
+    #         raise NameError
+    #     self.push(co[op](a, b))
 
 class VirtualMachine:
     def run(self, code_obj: types.CodeType) -> None:
