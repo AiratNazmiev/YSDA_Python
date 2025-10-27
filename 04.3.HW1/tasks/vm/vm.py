@@ -64,56 +64,12 @@ class Frame:
 
     def precall_op(self, arg: int) -> tp.Any:
         pass
-    
-    # def binary_op_op(self, op: int) -> None:
-    #     a, b = self.popn(2)
-    #     bo = {
-    #         8: operator.pow,
-    #         21: lambda x, y: x**y,
-
-    #         5: operator.mul,
-    #         18: operator.mul,
-
-    #         2: operator.floordiv,
-    #         15: operator.floordiv,
-
-    #         11: operator.truediv,
-    #         24: operator.truediv,
-
-    #         6: operator.mod,
-    #         19: operator.mod,
-
-    #         0: operator.add,
-    #         13: operator.add,
-
-    #         10: operator.sub,
-    #         23: operator.sub,
-
-    #         3: operator.lshift,
-    #         16: operator.lshift,
-
-    #         9: operator.rshift,
-    #         22: operator.rshift,
-
-    #         1: operator.and_,
-    #         14: operator.and_,
-
-    #         12: operator.xor,
-    #         25: operator.xor,
-
-    #         7: operator.or_,
-    #         20: operator.or_,
-    #     }
-    #     if op not in bo:
-    #         raise NameError
-    #     res = bo[op](a, b)
-    #     self.push(res)
 
     def binary_op_op(self, arg: int) -> None:
         """
         https://github.com/python/cpython/blob/main/Include/opcode.h
         """
-        a, b = self.popn(2)
+        lhs, rhs = self.popn(2)
         ops = {
             0: operator.add,
             1: operator.and_,
@@ -135,7 +91,7 @@ class Frame:
         if (op := ops.get(arg)) is None:
             raise NameError
 
-        res = op(a, b)
+        res = op(lhs, rhs)
         self.push(res)
 
     def call_op(self, arg: int) -> None:
