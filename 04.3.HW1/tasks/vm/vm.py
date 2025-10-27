@@ -64,53 +64,78 @@ class Frame:
 
     def precall_op(self, arg: int) -> tp.Any:
         pass
+    
+    # def binary_op_op(self, op: int) -> None:
+    #     a, b = self.popn(2)
+    #     bo = {
+    #         8: operator.pow,
+    #         21: lambda x, y: x**y,
 
-    def binary_op_op(self, op: int) -> None:
+    #         5: operator.mul,
+    #         18: operator.mul,
+
+    #         2: operator.floordiv,
+    #         15: operator.floordiv,
+
+    #         11: operator.truediv,
+    #         24: operator.truediv,
+
+    #         6: operator.mod,
+    #         19: operator.mod,
+
+    #         0: operator.add,
+    #         13: operator.add,
+
+    #         10: operator.sub,
+    #         23: operator.sub,
+
+    #         3: operator.lshift,
+    #         16: operator.lshift,
+
+    #         9: operator.rshift,
+    #         22: operator.rshift,
+
+    #         1: operator.and_,
+    #         14: operator.and_,
+
+    #         12: operator.xor,
+    #         25: operator.xor,
+
+    #         7: operator.or_,
+    #         20: operator.or_,
+    #     }
+    #     if op not in bo:
+    #         raise NameError
+    #     res = bo[op](a, b)
+    #     self.push(res)
+
+    def binary_op_op(self, arg: int) -> None:
+        """
+        https://github.com/python/cpython/blob/main/Include/opcode.h
+        """
         a, b = self.popn(2)
-        bo = {
-            8: operator.pow,
-            21: lambda x, y: x**y,
-
-            5: operator.mul,
-            18: operator.mul,
-
-            2: operator.floordiv,
-            15: operator.floordiv,
-
-            11: operator.truediv,
-            24: operator.truediv,
-
-            6: operator.mod,
-            19: operator.mod,
-
+        ops = {
             0: operator.add,
-            13: operator.add,
-
-            10: operator.sub,
-            23: operator.sub,
-
-            'SUBSCR': operator.getitem,
-
-            3: operator.lshift,
-            16: operator.lshift,
-
-            9: operator.rshift,
-            22: operator.rshift,
-
             1: operator.and_,
-            14: operator.and_,
-
-            12: operator.xor,
-            25: operator.xor,
-
+            2: operator.floordiv,
+            3: operator.lshift,
+            4: operator.matmul,
+            5: operator.mul,
+            6: operator.mod,
             7: operator.or_,
-            20: operator.or_,
+            8: operator.pow,
+            9: operator.rshift,
+            10: operator.sub,
+            11: operator.truediv,
+            12: operator.xor
         }
+        for n in range(13, 26):
+            ops[n] = ops[n-13]
 
-        if op not in bo:
+        if (op := ops.get(arg)) is None:
             raise NameError
 
-        res = bo[op](a, b)
+        res = op(a, b)
         self.push(res)
 
     def call_op(self, arg: int) -> None:
@@ -206,55 +231,55 @@ class Frame:
         const = self.pop()
         self.locals[arg] = const
 
-    # def build_list_op(self, count: int) -> None:
-    #     elts = self.popn(count)
-    #     self.push(elts)
+    def build_list_op(self, count: int) -> None:
+        elts = self.popn(count)
+        self.push(elts)
 
-    # def list_extend_op(self, i: int) -> None:
-    #     tos = self.pop()
-    #     tos1 = self.pop()
-    #     if len(tos1) == 0:
-    #         list.extend(tos1, tos)
-    #     else:
-    #         list.extend(tos1, tos)
-    #     self.push(tos1)
+    def list_extend_op(self, i: int) -> None:
+        tos = self.pop()
+        tos1 = self.pop()
+        if len(tos1) == 0:
+            list.extend(tos1, tos)
+        else:
+            list.extend(tos1, tos)
+        self.push(tos1)
 
-    # def build_tuple_op(self, size: int) -> None:
-    #     buf = []
-    #     for i in range(size):
-    #         tos = self.pop()
-    #         buf.append(tos)
-    #     self.push(tuple(buf))
+    def build_tuple_op(self, size: int) -> None:
+        buf = []
+        for i in range(size):
+            tos = self.pop()
+            buf.append(tos)
+        self.push(tuple(buf))
 
-    # def build_slice_op(self, argc: int) -> None:
-    #     if argc == 2:
-    #         tos = self.pop()
-    #         tos1 = self.pop()
-    #         self.push(slice(tos1, tos))
-    #     if argc == 3:
-    #         tos = self.pop()
-    #         tos1 = self.pop()
-    #         tos2 = self.pop()
-    #         self.push(slice(tos2, tos1, tos))
+    def build_slice_op(self, argc: int) -> None:
+        if argc == 2:
+            tos = self.pop()
+            tos1 = self.pop()
+            self.push(slice(tos1, tos))
+        if argc == 3:
+            tos = self.pop()
+            tos1 = self.pop()
+            tos2 = self.pop()
+            self.push(slice(tos2, tos1, tos))
 
-    # def binary_subscr_op(self, arg: tp.Any) -> None:
-    #     tos = self.pop()
-    #     tos1 = self.pop()
-    #     self.push(tos1[tos])
+    def binary_subscr_op(self, arg: tp.Any) -> None:
+        tos = self.pop()
+        tos1 = self.pop()
+        self.push(tos1[tos])
 
-    # def compare_op_op(self, op: str) -> None:
-    #     a, b = self.popn(2)
-    #     co = {
-    #         "<": lambda x, y: x < y,
-    #         "<=": lambda x, y: x <= y,
-    #         "==": lambda x, y: x == y,
-    #         "!=": lambda x, y: x != y,
-    #         ">": lambda x, y: x > y,
-    #         ">=": lambda x, y: x >= y,
-    #     }
-    #     if op not in co:
-    #         raise NameError
-    #     self.push(co[op](a, b))
+    def compare_op_op(self, op: str) -> None:
+        a, b = self.popn(2)
+        co = {
+            "<": lambda x, y: x < y,
+            "<=": lambda x, y: x <= y,
+            "==": lambda x, y: x == y,
+            "!=": lambda x, y: x != y,
+            ">": lambda x, y: x > y,
+            ">=": lambda x, y: x >= y,
+        }
+        if op not in co:
+            raise NameError
+        self.push(co[op](a, b))
 
 # def bind_args(func: types.FunctionType, defaults: tp.Any, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
 
