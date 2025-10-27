@@ -193,26 +193,26 @@ class Frame:
         """
         self.pop()
 
-    # def make_function_op(self, arg: int) -> None:
-    #     """
-    #     Operation description:
-    #         https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
-    #     """
-    #     code = self.pop()  # the code associated with the function (at TOS1)
+    def make_function_op(self, arg: int) -> None:
+        """
+        Operation description:
+            https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
+        """
+        code = self.pop()  # the code associated with the function (at TOS1)
 
-    #     # TODO: use arg to parse function defaults
+        # TODO: use arg to parse function defaults
 
-    #     def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
-    #         # TODO: parse input arguments using code attributes such as co_argcount
+        def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
+            # TODO: parse input arguments using code attributes such as co_argcount
 
-    #         parsed_args: dict[str, tp.Any] = {}
-    #         f_locals = dict(self.locals)
-    #         f_locals.update(parsed_args)
+            parsed_args: dict[str, tp.Any] = {}
+            f_locals = dict(self.locals)
+            f_locals.update(parsed_args)
 
-    #         frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
-    #         return frame.run()
+            frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
+            return frame.run()
 
-    #     self.push(f)
+        self.push(f)
 
     def store_name_op(self, arg: str) -> None:
         """
@@ -244,14 +244,15 @@ class Frame:
 
     def build_slice_op(self, argc: int) -> None:
         if argc == 2:
-            tos = self.pop()
-            tos1 = self.pop()
-            self.push(slice(tos1, tos))
+            start, stop = self.popn(2)
+            self.push(slice(start, stop))
         if argc == 3:
-            tos = self.pop()
-            tos1 = self.pop()
-            tos2 = self.pop()
-            self.push(slice(tos2, tos1, tos))
+            start, stop, step = self.popn(3)
+            self.push(slice(start, stop, step))
+
+    def binary_slice_op(self, arg: int) -> None:
+        container, start, end = self.popn(3)
+        self.push(container[start:end])
 
     def binary_subscr_op(self, arg: tp.Any) -> None:
         tos = self.pop()
@@ -259,8 +260,8 @@ class Frame:
         self.push(tos1[tos])
 
     def compare_op_op(self, op: str) -> None:
-        a, b = self.popn(2)
-        co = {
+        lhs, rhs = self.popn(2)
+        ops = {
             "<": lambda x, y: x < y,
             "<=": lambda x, y: x <= y,
             "==": lambda x, y: x == y,
@@ -268,9 +269,17 @@ class Frame:
             ">": lambda x, y: x > y,
             ">=": lambda x, y: x >= y,
         }
-        if op not in co:
+        if (comp := ops.get(op)) is None:
             raise NameError
-        self.push(co[op](a, b))
+        self.push(comp(lhs, rhs))
+
+    def is_op_op(self, invert: int) -> None:
+        lhs, rhs = self.popn(2)
+        self.push(bool((lhs is rhs) ^ invert))
+
+    def contains_op_op(self, invert: int) -> None:
+        lhs, rhs = self.popn(2)
+        self.push(bool((lhs in rhs) ^ invert))
 
 # def bind_args(func: types.FunctionType, defaults: tp.Any, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
 
