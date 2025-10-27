@@ -94,15 +94,50 @@ class Frame:
         res = op(lhs, rhs)
         self.push(res)
 
-    def call_op(self, arg: int) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-CALL
-        """
-        arguments = self.popn(arg)
-        self.pop()  # TODO: use self arg for method calls
-        f = self.pop()
-        self.push(f(*arguments))
+    def call_op(self, argc: int) -> None:
+        args = self.popn(argc)
+        self_or_null = self.pop()
+        func = self.pop()
+
+        if self_or_null is not None:
+            bound_self = getattr(func, "__self__", None)
+            if bound_self is not None:
+                result = func(*args)
+            else:
+                result = func(self_or_null, *args)
+        else:
+            result = func(*args)
+
+        self.push(result)
+
+    def call_kw_op(self, argc: int) -> None:
+        names = self.pop()
+        if not isinstance(names, tuple) or not all(isinstance(k, str) for k in names):
+            raise TypeError("CALL_KW expects a tuple of keyword names on TOS")
+
+        nkw = len(names)
+        nargs = argc - nkw
+        if nargs < 0:
+            raise ValueError("CALL_KW: argc smaller than number of keyword names")
+
+        kw_values = self.popn(nkw)
+        pos_args = self.popn(nargs)
+
+        self_or_null = self.pop()
+        func = self.pop()
+
+        kwargs = {k: v for k, v in zip(names, kw_values)}
+
+        if self_or_null is not None:
+            bound_self = getattr(func, "__self__", None)
+            if bound_self is not None:
+                result = func(*pos_args, **kwargs)
+            else:
+                result = func(self_or_null, *pos_args, **kwargs)
+        else:
+            result = func(*pos_args, **kwargs)
+
+        self.push(result)
 
     def load_name_op(self, arg: str) -> None:
         """
