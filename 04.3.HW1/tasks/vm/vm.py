@@ -11,13 +11,6 @@ import operator
 
 
 class Frame:
-    """
-    Frame header in cpython with description
-        https://github.com/python/cpython/blob/3.13/Include/internal/pycore_frame.h
-
-    Text description of frame parameters
-        https://docs.python.org/3/library/inspect.html?highlight=frame#types-and-members
-    """
     def __init__(self,
                  frame_code: types.CodeType,
                  frame_builtins: dict[str, tp.Any],
@@ -30,8 +23,15 @@ class Frame:
         self.data_stack: tp.Any = []
         self.return_value = None
 
+        self.instructions: list[dis.Instruction] = list(dis.get_instructions(self.code))
+        self.pc: int = 0
+        self.next_pc: int = 0
+
     def top(self) -> tp.Any:
         return self.data_stack[-1]
+
+    def topn(self, n: int) -> tp.Any:
+        return self.data_stack[-n]
 
     def pop(self) -> tp.Any:
         return self.data_stack.pop()
@@ -51,10 +51,28 @@ class Frame:
         else:
             return []
 
+    # def run(self) -> tp.Any:
+    #     for instruction in dis.get_instructions(self.code):
+    #         getattr(self, instruction.opname.lower() + "_op")(instruction.argval)
+    #     return self.return_value
+
     def run(self) -> tp.Any:
-        for instruction in dis.get_instructions(self.code):
-            getattr(self, instruction.opname.lower() + "_op")(instruction.argval)
+        while self.pc < len(self.instructions):
+            inst = self.instructions[self.pc]
+            self.next_pc = self.pc + 1  # fall-through by default
+
+            # For 3.13, jumps use *relative deltas*. Many other ops want resolved argval.
+            opname = inst.opname
+            is_jump = opname.startswith("JUMP") or opname.startswith("POP_JUMP") or opname == "FOR_ITER"
+            arg = inst.arg if is_jump else inst.argval
+
+            getattr(self, opname.lower() + "_op")(arg)
+            self.pc = self.next_pc
+
         return self.return_value
+
+    def nop_op(self, arg: tp.Any) -> None:
+        pass
 
     def resume_op(self, arg: int) -> tp.Any:
         pass
@@ -64,6 +82,51 @@ class Frame:
 
     def precall_op(self, arg: int) -> tp.Any:
         pass
+
+    def load_build_class_op(self, arg: int) -> None:
+        self.push(builtins.__build_class__)
+
+    def pop_top_op(self, arg: tp.Any) -> None:
+        """
+        Operation description:
+            https://docs.python.org/release/3.13.7/library/dis.html#opcode-POP_TOP
+        """
+        self.pop()
+
+    def end_for_op(self, arg: tp.Any) -> None:
+        self.pop_top_op(arg)
+
+    def copy_op(self, i: int) -> None:
+        assert i > 0
+        self.push(self.data_stack[i])
+
+    def swap_op(self, i: int) -> None:
+        self.data_stack[-i], self.data_stack[-1] = self.data_stack[-1], self.data_stack[-i]
+
+    ####################
+    # Unary operations #
+    ####################
+
+    def unary_positive_op(self, arg: tp.Any) -> None:
+        self.push(operator.pos(self.pop()))
+
+    def unary_negative_op(self, arg: tp.Any) -> None:
+        self.push(operator.neg(self.pop()))
+
+    def unary_not_op(self, arg: tp.Any) -> None:
+        self.push(operator.not_(self.pop()))
+
+    def unary_invert_op(self, arg: tp.Any) -> None:
+        self.push(operator.invert(self.pop()))
+
+    def get_iter_op(self, argc: tp.Any) -> None:
+        self.push(iter(self.pop()))
+
+    # def get_yield_from_iter_op(self, arg: tp.Any) -> None:
+    #     ...
+
+    def to_bool_op(self, arg: tp.Any) -> None:
+        self.push(bool(self.pop()))
 
     ##################################
     # Binary and in-place operations #
@@ -185,14 +248,28 @@ class Frame:
             raise NameError(f"Name {arg} is not defined")
 
 
+    # def load_global_op(self, arg: str) -> None:
+    #     """
+    #     Operation description:
+    #         https://docs.python.org/release/3.13.7/library/dis.html#opcode-LOAD_GLOBAL
+    #     """
+    #     # TODO: parse all scopes
+    #     self.push(self.builtins[arg])
+    #     self.push(None)
     def load_global_op(self, arg: str) -> None:
         """
         Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-LOAD_GLOBAL
+            https://docs.python.org/release/3.11.5/library/dis.html#opcode-LOAD_GLOBAL
         """
-        # TODO: parse all scopes
-        self.push(self.builtins[arg])
-        self.push(None)
+        if arg in self.globals:
+            self.push(self.globals[arg])
+        elif arg in self.builtins:
+            self.push(self.builtins[arg])
+        else:
+            raise NameError
+
+    def load_fast_op(self, var_num: str) -> None:
+        self.push(self.locals[var_num])
 
     def load_const_op(self, arg: tp.Any) -> None:
         """
@@ -215,30 +292,39 @@ class Frame:
         """
         self.return_value = arg
 
-    def pop_top_op(self, arg: tp.Any) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-POP_TOP
-        """
-        self.pop()
+    # def make_function_op(self, arg: int) -> None:
+    #     """
+    #     Operation description:
+    #         https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
+    #     """
+    #     code = self.pop()  # the code associated with the function (at TOS1)
+
+    #     # TODO: use arg to parse function defaults
+
+    #     def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
+    #         # TODO: parse input arguments using code attributes such as co_argcount
+
+    #         parsed_args: dict[str, tp.Any] = {}
+    #         f_locals = dict(self.locals)
+    #         f_locals.update(parsed_args)
+
+    #         frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
+    #         return frame.run()
+
+    #     self.push(f)
 
     def make_function_op(self, arg: int) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
-        """
-        code = self.pop()  # the code associated with the function (at TOS1)
+        code = self.pop()
 
-        # TODO: use arg to parse function defaults
+        sig_func = types.FunctionType(code, self.globals, code.co_name)
 
-        def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
-            # TODO: parse input arguments using code attributes such as co_argcount
+        def f(*call_args: tp.Any, **call_kwargs: tp.Any) -> tp.Any:
+            bound_locals = bind_args(sig_func, *call_args, **call_kwargs)
 
-            parsed_args: dict[str, tp.Any] = {}
-            f_locals = dict(self.locals)
-            f_locals.update(parsed_args)
+            callee_locals = dict(self.locals)
+            callee_locals.update(bound_locals)
 
-            frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
+            frame = Frame(code, self.builtins, self.globals, callee_locals)
             return frame.run()
 
         self.push(f)
@@ -293,200 +379,65 @@ class Frame:
             raise NameError
         self.push(comp(lhs, rhs))
 
-    def is_op_op(self, invert: int) -> None:
-        lhs, rhs = self.popn(2)
-        self.push(bool((lhs is rhs) ^ invert))
-
     def contains_op_op(self, invert: int) -> None:
         lhs, rhs = self.popn(2)
         self.push(bool((lhs in rhs) ^ invert))
 
-# def bind_args(func: types.FunctionType, defaults: tp.Any, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
+    def is_op_op(self, invert: int) -> None:
+        lhs, rhs = self.popn(2)
+        self.push(bool((lhs is rhs) ^ invert))
 
-#     CO_VARARGS = 4
-#     CO_VARKEYWORDS = 8
+    ###########
+    # Imports #
+    ###########
 
-#     ERR_TOO_MANY_POS_ARGS = 'Too many positional arguments'
-#     ERR_TOO_MANY_KW_ARGS = 'Too many keyword arguments'
-#     ERR_MULT_VALUES_FOR_ARG = 'Multiple values for arguments'
-#     ERR_MISSING_POS_ARGS = 'Missing positional arguments'
-#     ERR_MISSING_KWONLY_ARGS = 'Missing keyword-only arguments'
-#     ERR_POSONLY_PASSED_AS_KW = 'Positional-only argument passed as keyword argument'
+    # def import_name_op(self, namei: str) -> None:
+    #     level, fromlist = self.popn(2)
+    #     self.push(
+    #         __import__(namei, self.globals, self.locals, fromlist, level)
+    #     )
 
-#     code = func.__code__
+    #########
+    # Jumps #
+    #########
+    def _jump_forward(self, delta: int) -> None:
+        # Move to instruction after current, plus delta
+        self.next_pc = self.pc + 1 + int(delta)
 
-#     if 'args' in kwargs.keys() or 'kwargs' in kwargs.keys():
-#         args = kwargs['args']
-#         kwargs = kwargs['kwargs']
+    def _jump_backward(self, delta: int) -> None:
+        # Move to instruction after current, minus delta
+        self.next_pc = self.pc + 1 - int(delta)
 
-#     if not args:
-#         args = None   # type: ignore
-#     if not kwargs:
-#         kwargs = None   # type: ignore
+    def pop_jump_if_true_op(self, delta: int) -> None:
+        v = self.pop()
+        if not isinstance(v, bool):
+            raise TypeError("POP_JUMP_IF_TRUE requires exact bool (Py 3.13)")
+        if v:
+            self._jump_forward(delta)
 
-#     if defaults:
-#         defaults_ = defaults.copy()
-#         defaults = None
-#         kwdefaults = None
-#         if defaults_:
-#             if len(defaults_) == 1:
-#                 defaults = defaults_[0]
-#             if len(defaults_) == 2:
-#                 defaults = defaults_[0]
-#                 kwdefaults = defaults_[1]
-#     else:
-#         defaults = None
-#         kwdefaults = None
-#     argcount = code.co_argcount
-#     varnames = code.co_varnames
-#     kwonlyargcount = code.co_kwonlyargcount
-#     posonlyargcount = code.co_posonlyargcount
-#     flags = code.co_flags
-#     flag_varargs = bool(CO_VARARGS & flags)
-#     flag_varkeywords = bool(CO_VARKEYWORDS & flags)
+    def pop_jump_if_false_op(self, delta: int) -> None:
+        v = self.pop()
+        if not isinstance(v, bool):
+            raise TypeError("POP_JUMP_IF_FALSE requires exact bool (Py 3.13)")
+        if not v:
+            self._jump_forward(delta)
 
-#     # arguments: signature and input
-#     args_kwargs_count = int(flag_varargs) + int(flag_varkeywords)
-#     signature_args_count = argcount + args_kwargs_count + kwonlyargcount
+    def pop_jump_if_none_op(self, delta: int) -> None:
+        if self.pop() is None:
+            self._jump_forward(delta)
 
-#     # only function's arguments and args/kwargs names
-#     varnames_ = varnames[:signature_args_count]
-#     args_name, kwargs_name = None, None
-#     if flag_varargs and flag_varkeywords:
-#         args_name = varnames_[-2]
-#         kwargs_name = varnames_[-1]
-#     elif flag_varargs and not flag_varkeywords:
-#         args_name = varnames_[-1]
-#     elif not flag_varargs and flag_varkeywords:
-#         kwargs_name = varnames_[-1]
+    def pop_jump_if_not_none_op(self, delta: int) -> None:
+        if self.pop() is not None:
+            self._jump_forward(delta)
 
-#     # sentinel instead of None
-#     NONE: tp.Any = object()
+    def jump_forward_op(self, delta: int) -> None:
+        self._jump_forward(delta)
 
-#     # binding template with flags
-#     res: tp.Any = {var: {'value': NONE,
-#                     'seen': False,
-#                     'pos_only': False,
-#                     'kw_only': False}
-#                 for var in varnames_}
+    def jump_backward_op(self, delta: int) -> None:
+        self._jump_backward(delta)
 
-#     # mark pos only (always at the beginning)
-#     for i in range(posonlyargcount):
-#         res[varnames_[i]]['pos_only'] = True
-
-#     # mark kw only (last args without *args and **kwargs, they are always last in co_varnames)
-#     args_list = list(res.keys())
-#     if kwonlyargcount > 0:
-#         if args_kwargs_count > 0:
-#             kw_only = args_list[:-args_kwargs_count][-kwonlyargcount:]
-#         else:
-#             kw_only = args_list[-kwonlyargcount:]
-#         assert len(kw_only) == kwonlyargcount
-#         for kw in kw_only:
-#             res[kw]['kw_only'] = True
-
-#     # go through res and fill in pos args
-#     args_ = list(args) if args is not None else None  # for mutability
-#     pos = None
-#     pos_slots = len(varnames_) - (kwonlyargcount + args_kwargs_count)
-#     for k, v in res.items():
-#         pos = args_.pop(0) if args_ else NONE
-#         if pos is not NONE:
-#             if flag_varargs and (pos_slots <= 0):
-#                 if res[args_name]['value'] is not NONE:
-#                     res[args_name]['value'] += [pos]
-#                 else:
-#                     res[args_name]['value'] = [pos]
-#                 res[args_name]['seen'] = True
-#             elif v['pos_only'] or (not v['kw_only']):
-#                 v['value'] = pos
-#                 v['seen'] = True
-#             elif v['kw_only']:
-#                 raise TypeError(ERR_TOO_MANY_POS_ARGS)
-#         pos_slots -= 1
-
-#     # in case of only *args and popped first pos
-#     if (len(res) == 1) and flag_varargs and (pos_slots >= 0):
-#         args_ = [pos] + args_
-
-#     # if there's left some poses, raise
-#     if (not flag_varargs) and len(args_) > 0:
-#         raise TypeError(ERR_TOO_MANY_POS_ARGS)
-
-#     # go through kw args and put them into res
-#     if kwargs:
-#         for k, v in kwargs.items():
-#             if (k not in res) and (not flag_varkeywords):
-#                 raise TypeError(ERR_TOO_MANY_KW_ARGS)
-#             elif (k in res) and res[k]['pos_only']:
-#                 if not flag_varkeywords:
-#                     raise TypeError(ERR_POSONLY_PASSED_AS_KW)
-#             elif (k in res) and res[k]['seen']:
-#                 raise TypeError(ERR_MULT_VALUES_FOR_ARG)
-#             elif k in res:
-#                 res[k]['value'] = v
-#                 res[k]['seen'] = True
-#             elif k not in res:
-#                 if res[kwargs_name]['value'] is not NONE:
-#                     res[kwargs_name]['value'].update({k: v})
-#                 else:
-#                     res[kwargs_name]['value'] = {k: v}
-#                 res[kwargs_name]['seen'] = True
-
-#     # go through defaults - args (stand before *args, **kwargs and kw_only)
-#     if defaults is not None:
-#         if (strip := kwonlyargcount + args_kwargs_count) > 0:
-#             args_before_stars_and_kw = args_list[:-strip]
-#         else:
-#             args_before_stars_and_kw = args_list.copy()
-#         for i in range(len(defaults)):
-#             k = args_before_stars_and_kw[-i-1]
-#             if not res[k]['seen']:
-#                 res[k]['value'] = defaults[-i-1]
-#                 res[k]['seen'] = True
-
-#     # go through defaults - kwargs
-#     if kwdefaults is not None:
-#         for k, v in kwdefaults.items():
-#             if not res[k]['seen']:
-#                 res[k]['value'] = v
-#                 res[k]['seen'] = True
-
-#     # pack rest of args and kwargs to *args
-#     if flag_varargs:
-#         if not res[args_name]['seen']:
-#             if args_ and args_[0] is not NONE:
-#                 res[args_name]['value'] = tuple(args_)
-#             else:
-#                 res[args_name]['value'] = tuple()
-#             res[args_name]['seen'] = True
-#         else:
-#             res[args_name]['value'] += args_
-#             res[args_name]['value'] = tuple(res[args_name]['value'])
-
-#     # pack rest of kwargs to **kwargs
-#     if flag_varkeywords and kwargs is not None:
-#         extra_kwargs = set(kwargs.keys()) - set(res.keys())
-#         pos_only_args = [k for k, v in res.items() if v['pos_only']]
-#         if kw_pos := set(kwargs.keys()).intersection(set(pos_only_args)):
-#             extra_kwargs = extra_kwargs.union(kw_pos)
-#         extra_kwargs_dict = {k: kwargs[k] for k in extra_kwargs}
-#         if extra_kwargs_dict:
-#             res[kwargs_name]['value'] = extra_kwargs_dict
-#         else:
-#             res[kwargs_name]['value'] = dict()
-#         res[kwargs_name]['seen'] = True
-
-#     # check missing arguments
-#     for k, v in res.items():
-#         if (not v['seen']) and (k not in ['args', 'kwargs']):
-#             if v['pos_only'] or (not v['kw_only']):
-#                 raise TypeError(ERR_MISSING_POS_ARGS)
-#             else:
-#                 raise TypeError(ERR_MISSING_KWONLY_ARGS)
-
-#     result = {k: v['value'] for k, v in res.items()}
-#     return result
+    def jump_backward_no_interrupt_op(self, delta: int) -> None:
+        self._jump_backward(delta)
 
 class VirtualMachine:
     def run(self, code_obj: types.CodeType) -> None:
@@ -496,3 +447,116 @@ class VirtualMachine:
         globals_context: dict[str, tp.Any] = {}
         frame = Frame(code_obj, builtins.globals()['__builtins__'], globals_context, globals_context)
         return frame.run()
+
+def bind_args(func: types.FunctionType, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
+    """Bind values from `args` and `kwargs` to corresponding arguments of `func`
+
+    :param func: function to be inspected
+    :param args: positional arguments to be bound
+    :param kwargs: keyword arguments to be bound
+    :return: `dict[argument_name] = argument_value` if binding was successful,
+             raise TypeError with one of `ERR_*` error descriptions otherwise
+    """
+    CO_VARARGS = 4
+    CO_VARKEYWORDS = 8
+
+    ERR_TOO_MANY_POS_ARGS = 'Too many positional arguments'
+    ERR_TOO_MANY_KW_ARGS = 'Too many keyword arguments'
+    ERR_MULT_VALUES_FOR_ARG = 'Multiple values for arguments'
+    ERR_MISSING_POS_ARGS = 'Missing positional arguments'
+    ERR_MISSING_KWONLY_ARGS = 'Missing keyword-only arguments'
+    ERR_POSONLY_PASSED_AS_KW = 'Positional-only argument passed as keyword argument'
+
+    code = func.__code__
+    flags = code.co_flags
+
+    posonly_cnt = getattr(code, "co_posonlyargcount", 0)
+    total_pos_cnt = code.co_argcount
+    kwonly_cnt = code.co_kwonlyargcount
+
+    varnames = code.co_varnames
+
+    posonly_names = list(varnames[:posonly_cnt])
+    pos_or_kw_names = list(varnames[posonly_cnt: total_pos_cnt])
+    kwonly_names = list(varnames[total_pos_cnt: total_pos_cnt + kwonly_cnt])
+
+    idx = total_pos_cnt + kwonly_cnt
+    vararg_name = varnames[idx] if (flags & CO_VARARGS) else None
+    if vararg_name is not None:
+        idx += 1
+    varkw_name = varnames[idx] if (flags & CO_VARKEYWORDS) else None
+
+
+    pos_defaults = func.__defaults__ or ()
+    kw_defaults = func.__kwdefaults__ or {}
+
+    all_pos_names = posonly_names + pos_or_kw_names
+    pos_default_map: dict[str, tp.Any] = {}
+    if pos_defaults:
+        for name, default in zip(all_pos_names[-len(pos_defaults):], pos_defaults):
+            pos_default_map[name] = default
+
+    bound: dict[str, tp.Any] = {}
+    remaining_kwargs = dict(kwargs)
+
+    if varkw_name is None:
+        for k in list(remaining_kwargs.keys()):
+            if k in posonly_names:
+                raise TypeError(ERR_POSONLY_PASSED_AS_KW)
+
+    if vararg_name is None and len(args) > total_pos_cnt:
+        raise TypeError(ERR_TOO_MANY_POS_ARGS)
+
+    n_bind_pos = min(len(args), total_pos_cnt)
+    for i in range(n_bind_pos):
+        bound[all_pos_names[i]] = args[i]
+
+    extra_pos = args[n_bind_pos:]
+    if vararg_name is not None:
+        bound[vararg_name] = tuple(extra_pos)
+    else:
+        if extra_pos:
+            raise TypeError(ERR_TOO_MANY_POS_ARGS)
+
+    for name in pos_or_kw_names:
+        if name in remaining_kwargs:
+            if name in bound:
+                raise TypeError(ERR_MULT_VALUES_FOR_ARG)
+            bound[name] = remaining_kwargs.pop(name)
+
+    if varkw_name is None:
+        for k in list(remaining_kwargs.keys()):
+            if k in posonly_names:
+                raise TypeError(ERR_POSONLY_PASSED_AS_KW)
+
+    for name in kwonly_names:
+        if name in remaining_kwargs:
+            bound[name] = remaining_kwargs.pop(name)
+
+    for name in all_pos_names:
+        if name not in bound:
+            if name in pos_default_map:
+                bound[name] = pos_default_map[name]
+            else:
+                raise TypeError(ERR_MISSING_POS_ARGS)
+
+    for name in kwonly_names:
+        if name not in bound:
+            if name in kw_defaults:
+                bound[name] = kw_defaults[name]
+            else:
+                raise TypeError(ERR_MISSING_KWONLY_ARGS)
+
+    if remaining_kwargs:
+        if varkw_name is not None:
+            bound[varkw_name] = dict(remaining_kwargs)
+        else:
+            raise TypeError(ERR_TOO_MANY_KW_ARGS)
+    else:
+        if varkw_name is not None and varkw_name not in bound:
+            bound[varkw_name] = {}
+
+    if vararg_name is not None and vararg_name not in bound:
+        bound[vararg_name] = ()
+
+    return bound
