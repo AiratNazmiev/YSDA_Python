@@ -333,9 +333,12 @@ class Frame:
         self.push(v1)
         self.push(v2)
 
+    def load_fast_and_clear_op(self, var_name: str) -> None:
+        value = self.locals.pop(var_name, None)  # None == NULL when uninitialized
+        self.push(value)
+
     def store_fast_op(self, var_num: str) -> None:
         self.locals[var_num] = self.pop()
-
 
     def load_const_op(self, arg: tp.Any) -> None:
         """
@@ -358,42 +361,42 @@ class Frame:
         """
         self.return_value = arg
 
-    # def make_function_op(self, arg: int) -> None:
-    #     """
-    #     Operation description:
-    #         https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
-    #     """
-    #     code = self.pop()  # the code associated with the function (at TOS1)
-
-    #     # TODO: use arg to parse function defaults
-
-    #     def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
-    #         # TODO: parse input arguments using code attributes such as co_argcount
-
-    #         parsed_args: dict[str, tp.Any] = {}
-    #         f_locals = dict(self.locals)
-    #         f_locals.update(parsed_args)
-
-    #         frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
-    #         return frame.run()
-
-    #     self.push(f)
-
     def make_function_op(self, arg: int) -> None:
-        code = self.pop()
+        """
+        Operation description:
+            https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
+        """
+        code = self.pop()  # the code associated with the function (at TOS1)
 
-        sig_func = types.FunctionType(code, self.globals, code.co_name)
+        # TODO: use arg to parse function defaults
 
-        def f(*call_args: tp.Any, **call_kwargs: tp.Any) -> tp.Any:
-            bound_locals = bind_args(sig_func, *call_args, **call_kwargs)
+        def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
+            # TODO: parse input arguments using code attributes such as co_argcount
 
-            callee_locals = dict(self.locals)
-            callee_locals.update(bound_locals)
+            parsed_args: dict[str, tp.Any] = {}
+            f_locals = dict(self.locals)
+            f_locals.update(parsed_args)
 
-            frame = Frame(code, self.builtins, self.globals, callee_locals)
+            frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
             return frame.run()
 
         self.push(f)
+
+    # def make_function_op(self, arg: int) -> None:
+    #     code = self.pop()
+
+    #     sig_func = types.FunctionType(code, self.globals, code.co_name)
+
+    #     def f(*call_args: tp.Any, **call_kwargs: tp.Any) -> tp.Any:
+    #         bound_locals = bind_args(sig_func, *call_args, **call_kwargs)
+
+    #         callee_locals = dict(self.locals)
+    #         callee_locals.update(bound_locals)
+
+    #         frame = Frame(code, self.builtins, self.globals, callee_locals)
+    #         return frame.run()
+
+    #     self.push(f)
 
     def store_name_op(self, arg: str) -> None:
         """
@@ -403,9 +406,23 @@ class Frame:
         const = self.pop()
         self.locals[arg] = const
 
-    def build_list_op(self, count: int) -> None:
-        elts = self.popn(count)
+    def build_tuple_op(self, count: int) -> None:
+        elts = tuple(self.popn(count))
         self.push(elts)
+
+    def build_list_op(self, count: int) -> None:
+        elts = list(self.popn(count))
+        self.push(elts)
+
+    def build_set_op(self, count: int) -> None:
+        elts = set(self.popn(count))
+        self.push(elts)
+
+    def build_map_op(self, count: int) -> None:
+        values = self.popn(2*count)
+        new_map = {values[2*idx]: values[2*idx+1] for idx in range(count)}
+
+        self.push(new_map)
 
     def build_string_op(self, count: int) -> None:
         fragments = self.popn(count)
@@ -420,13 +437,6 @@ class Frame:
         else:
             list.extend(tos1, tos)
         self.push(tos1)
-
-    def build_tuple_op(self, size: int) -> None:
-        buf = []
-        for i in range(size):
-            tos = self.pop()
-            buf.append(tos)
-        self.push(tuple(buf))
 
     def build_slice_op(self, argc: int) -> None:
         if argc == 2:
@@ -460,6 +470,12 @@ class Frame:
         result = value.__format__("")
         self.push(result)
 
+    def format_with_spec_op(self, arg: tp.Any) -> None:
+        spec = self.pop()
+        value = self.pop()
+        result = value.__format__(spec)
+        self.push(result)
+
     def compare_op_op(self, op: str) -> None:
         lhs, rhs = self.popn(2)
         ops = {
@@ -485,22 +501,20 @@ class Frame:
     ###########
     # Imports #
     ###########
+    # TODO: less tests are passed when uncomment
+    # def import_name_op(self, namei: str) -> None:
+    #     level, fromlist = self.popn(2)
+    #     self.push(__import__(namei, self.globals, self.locals, fromlist, level))
 
-    def import_name_op(self, namei: str) -> None:
-        level, fromlist = self.popn(2)
-        self.push(
-            __import__(namei, self.globals, self.locals, fromlist, level)
-        )
+    # def import_star_op(self, arg: tp.Any) -> None:
+    #     mod = self.pop()
+    #     for attr in dir(mod):
+    #         if attr[0] != '_':
+    #             self.locals[attr] = getattr(mod, attr)
 
-    def import_star_op(self, arg: tp.Any) -> None:
-        mod = self.pop()
-        for attr in dir(mod):
-            if attr[0] != '_':
-                self.locals[attr] = getattr(mod, attr)
-
-    def import_from_op(self, namei: str) -> None:
-        mod = self.top()
-        self.push(getattr(mod, namei))
+    # def import_from_op(self, namei: str) -> None:
+    #     mod = self.top()
+    #     self.push(getattr(mod, namei))
 
     def delete_name_op(self, namei: str) -> None:
         del self.locals[namei]
@@ -600,6 +614,7 @@ class Frame:
     #     except StopIteration:
     #         # self.pop()
     #         self._jump_forward(delta)
+
     # def for_iter_op(self, delta: int) -> None:
     #     it = self.top()  # keep iterator on stack while iterating
     #     try:
