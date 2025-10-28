@@ -28,6 +28,10 @@ class Frame:
         self.next_pc: int = 0
 
         self.instructions_need_arg = {
+            "LOAD_GLOBAL",
+            "LOAD_FAST_LOAD_FAST",
+            "LOAD_ATTR",
+
             "JUMP_FORWARD",
             "JUMP_BACKWARD",
             "JUMP_BACKWARD_NO_INTERRUPT",
@@ -257,24 +261,54 @@ class Frame:
         else:
             raise NameError(f"Name {arg} is not defined")
 
-    def load_global_op(self, arg: str) -> None:
-        # TODO: smth strange with lower bits, inst.arg vs inst.argval
-        if arg in self.globals:
-            val = self.globals[arg]
-        elif arg in self.builtins:
-            val = self.builtins[arg]
-        else:
-            raise NameError(f"global name {arg!r} is not defined")
+    # def load_global_op(self, arg: str) -> None:
+    #     # TODO: smth strange with lower bits, inst.arg vs inst.argval
+    #     if arg in self.globals:
+    #         val = self.globals[arg]
+    #     elif arg in self.builtins:
+    #         val = self.builtins[arg]
+    #     else:
+    #         raise NameError(f"global name {arg!r} is not defined")
 
-        # Push the callable/value and a NULL sentinel for CALL
+    #     # Push the callable/value and a NULL sentinel for CALL
+    #     self.push(val)
+    #     self.push(None)
+
+    def load_global_op(self, namei: int) -> None:
+        idx = namei >> 1
+        push_null = (namei & 1) != 0
+
+        try:
+            name = self.code.co_names[idx]
+        except IndexError:
+            raise RuntimeError(f"LOAD_GLOBAL: bad co_names index {idx}")
+
+        if name in self.globals:
+            val = self.globals[name]
+        elif name in self.builtins:
+            val = self.builtins[name]
+        else:
+            raise NameError(f"name {name} is not defined")
+
+        if push_null:
+            self.push(None)
         self.push(val)
-        self.push(None)
 
     def load_fast_op(self, var_num: str) -> None:
         self.push(self.locals[var_num])
 
-    # def load_fast_load_fast_op(self, var_nums) -> None:
-    #     pass
+    def load_fast_load_fast_op(self, var_nums: int) -> None:
+        idx1 = (var_nums >> 4)
+        idx2 = (var_nums & 0x0F)
+
+        name1 = self.code.co_varnames[idx1]
+        name2 = self.code.co_varnames[idx2]
+
+        v1 = self.locals[name1]
+        v2 = self.locals[name2]
+
+        self.push(v1)
+        self.push(v2)
 
     def store_fast_op(self, var_num: str) -> None:
         self.locals[var_num] = self.pop()
@@ -454,10 +488,41 @@ class Frame:
     def delete_fast_op(self, namei: str) -> None:
         del self.locals[namei]
 
-    def load_attr_op(self, attr: str) -> None:
+    # def load_attr_op(self, attr: str) -> None:
+    #     obj = self.pop()
+    #     val = getattr(obj, attr)
+    #     self.push(val)
+    def load_attr_op(self, namei: int) -> None:
+        idx = namei >> 1
+        is_method_form = (namei & 1) == 1
+
+
+        name = self.code.co_names[idx]
+
+        if not is_method_form:
+            obj = self.top()
+            attr = getattr(obj, name)
+            self.data_stack[-1] = attr
+            return
+
         obj = self.pop()
-        val = getattr(obj, attr)
-        self.push(val)
+        attr = getattr(obj, name)
+
+        bound_to_obj = getattr(attr, "__self__", None) is obj
+
+        if bound_to_obj:
+            func = getattr(attr, "__func__", None)
+            if func is None:
+                self.push(attr)
+                self.push(None)
+                return
+
+            self.push(func)
+            self.push(obj)
+        else:
+            self.push(attr)
+            self.push(None)
+
 
     def store_attr_op(self, name: str) -> None:
         val, obj = self.popn(2)
