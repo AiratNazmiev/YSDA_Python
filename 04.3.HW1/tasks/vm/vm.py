@@ -110,7 +110,8 @@ class Frame:
 
     def end_for_op(self, arg: tp.Any) -> None:
         # TODO: may it's a typo in docs (just pass)
-        self.pop_top_op(arg)
+        #self.pop_top_op(arg)
+        pass
 
     def copy_op(self, i: int) -> None:
         assert i > 0
@@ -274,7 +275,29 @@ class Frame:
     #     self.push(val)
     #     self.push(None)
 
+    # def load_global_op(self, namei: int) -> None:
+    #     idx = namei >> 1
+    #     push_null = (namei & 1) != 0
+
+    #     try:
+    #         name = self.code.co_names[idx]
+    #     except IndexError:
+    #         raise RuntimeError(f"LOAD_GLOBAL: bad co_names index {idx}")
+
+    #     if name in self.globals:
+    #         val = self.globals[name]
+    #     elif name in self.builtins:
+    #         val = self.builtins[name]
+    #     else:
+    #         raise NameError(f"name {name} is not defined")
+
+    #     if push_null:
+    #         self.push(None)
+    #     self.push(val)
+
     def load_global_op(self, namei: int) -> None:
+        # TODO: If the low bit of namei is set, then a NULL is pushed to the stack before the global variable.
+        # but more tests are passed with reversed ordering
         idx = namei >> 1
         push_null = (namei & 1) != 0
 
@@ -290,9 +313,9 @@ class Frame:
         else:
             raise NameError(f"name {name} is not defined")
 
+        self.push(val)
         if push_null:
             self.push(None)
-        self.push(val)
 
     def load_fast_op(self, var_num: str) -> None:
         self.push(self.locals[var_num])
@@ -488,14 +511,9 @@ class Frame:
     def delete_fast_op(self, namei: str) -> None:
         del self.locals[namei]
 
-    # def load_attr_op(self, attr: str) -> None:
-    #     obj = self.pop()
-    #     val = getattr(obj, attr)
-    #     self.push(val)
     def load_attr_op(self, namei: int) -> None:
         idx = namei >> 1
         is_method_form = (namei & 1) == 1
-
 
         name = self.code.co_names[idx]
 
@@ -546,7 +564,7 @@ class Frame:
     def pop_jump_if_true_op(self, delta: int) -> None:
         v = self.pop()
         if not isinstance(v, bool):
-            raise TypeError("POP_JUMP_IF_TRUE requires exact bool (Py 3.13)")
+            raise TypeError("POP_JUMP_IF_TRUE requires exact bool")
         if v:
             self._jump_forward(delta)
 
@@ -562,7 +580,7 @@ class Frame:
     def pop_jump_if_false_op(self, delta: int) -> None:
         v = self.pop()
         if not isinstance(v, bool):
-            raise TypeError("POP_JUMP_IF_FALSE requires exact bool (Py 3.13)")
+            raise TypeError("POP_JUMP_IF_FALSE requires exact bool")
         if not v:
             self._jump_forward(delta)
 
@@ -582,6 +600,17 @@ class Frame:
     #     except StopIteration:
     #         # self.pop()
     #         self._jump_forward(delta)
+    # def for_iter_op(self, delta: int) -> None:
+    #     it = self.top()  # keep iterator on stack while iterating
+    #     try:
+    #         value = next(it)
+    #     except StopIteration:
+    #         # Exhausted: remove iterator and jump past loop (and END_FOR)
+    #         self.pop()
+    #         self._jump_forward(delta)
+    #     else:
+    #         # Still iterating: push yielded value; iterator remains under it
+    #         self.push(value)
 
 class VirtualMachine:
     def run(self, code_obj: types.CodeType) -> None:
