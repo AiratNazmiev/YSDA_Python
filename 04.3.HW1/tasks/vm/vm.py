@@ -59,9 +59,8 @@ class Frame:
     def run(self) -> tp.Any:
         while self.pc < len(self.instructions):
             inst = self.instructions[self.pc]
-            self.next_pc = self.pc + 1  # fall-through by default
+            self.next_pc = self.pc + 1
 
-            # For 3.13, jumps use *relative deltas*. Many other ops want resolved argval.
             opname = inst.opname
             is_jump = opname.startswith("JUMP") or opname.startswith("POP_JUMP") or opname == "FOR_ITER"
             arg = inst.arg if is_jump else inst.argval
@@ -98,7 +97,7 @@ class Frame:
 
     def copy_op(self, i: int) -> None:
         assert i > 0
-        self.push(self.data_stack[i])
+        self.push(self.data_stack[-i])
 
     def swap_op(self, i: int) -> None:
         self.data_stack[-i], self.data_stack[-1] = self.data_stack[-1], self.data_stack[-i]
@@ -152,10 +151,8 @@ class Frame:
             11: operator.truediv,
             12: operator.xor
         }
-        for n in range(13, 26):
-            ops[n] = ops[n-13]
 
-        if (op := ops.get(arg)) is None:
+        if (op := ops.get(arg % 13)) is None:
             raise NameError
 
         res = op(lhs, rhs)
@@ -247,29 +244,28 @@ class Frame:
         else:
             raise NameError(f"Name {arg} is not defined")
 
-
-    # def load_global_op(self, arg: str) -> None:
-    #     """
-    #     Operation description:
-    #         https://docs.python.org/release/3.13.7/library/dis.html#opcode-LOAD_GLOBAL
-    #     """
-    #     # TODO: parse all scopes
-    #     self.push(self.builtins[arg])
-    #     self.push(None)
     def load_global_op(self, arg: str) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.11.5/library/dis.html#opcode-LOAD_GLOBAL
-        """
+        # TODO: smth strange with lower bits, inst.arg vs inst.argval
         if arg in self.globals:
-            self.push(self.globals[arg])
+            val = self.globals[arg]
         elif arg in self.builtins:
-            self.push(self.builtins[arg])
+            val = self.builtins[arg]
         else:
-            raise NameError
+            raise NameError(f"global name {arg!r} is not defined")
+
+        # Push the callable/value and a NULL sentinel for CALL
+        self.push(val)
+        self.push(None)
 
     def load_fast_op(self, var_num: str) -> None:
         self.push(self.locals[var_num])
+
+    # def load_fast_load_fast_op(self, var_nums) -> None:
+    #     pass
+
+    def store_fast_op(self, var_num: str) -> None:
+        self.locals[var_num] = self.pop()
+
 
     def load_const_op(self, arg: tp.Any) -> None:
         """
@@ -341,6 +337,11 @@ class Frame:
         elts = self.popn(count)
         self.push(elts)
 
+    def build_string_op(self, count: int) -> None:
+        fragments = self.popn(count)
+        string = "".join(fragments)
+        self.push(string)
+
     def list_extend_op(self, i: int) -> None:
         tos = self.pop()
         tos1 = self.pop()
@@ -364,6 +365,30 @@ class Frame:
         if argc == 3:
             start, stop, step = self.popn(3)
             self.push(slice(start, stop, step))
+
+    def extended_arg_op(self, arg: tp.Any) -> None:
+        # TODO
+        pass
+
+    def convert_value_op(self, oparg: int) -> None:
+        value = self.pop()
+        #print(f'{oparg=}')
+        if oparg == 0:
+            result = value
+        elif oparg == 1:
+            result = str(value)
+        elif oparg == 2:
+            result = repr(value)
+        elif oparg == 3:
+            result = ascii(value)
+        else:
+            result = str(value) #raise ValueError("Unknown oparg code")
+        self.push(result)
+
+    def format_simple_op(self, arg: tp.Any) -> None:
+        value = self.pop()
+        result = value.__format__("")
+        self.push(result)
 
     def compare_op_op(self, op: str) -> None:
         lhs, rhs = self.popn(2)
@@ -391,11 +416,43 @@ class Frame:
     # Imports #
     ###########
 
-    # def import_name_op(self, namei: str) -> None:
-    #     level, fromlist = self.popn(2)
-    #     self.push(
-    #         __import__(namei, self.globals, self.locals, fromlist, level)
-    #     )
+    def import_name_op(self, namei: str) -> None:
+        level, fromlist = self.popn(2)
+        self.push(
+            __import__(namei, self.globals, self.locals, fromlist, level)
+        )
+
+    def import_star_op(self, arg: tp.Any) -> None:
+        mod = self.pop()
+        for attr in dir(mod):
+            if attr[0] != '_':
+                self.locals[attr] = getattr(mod, attr)
+
+    def import_from_op(self, namei: str) -> None:
+        mod = self.top()
+        self.push(getattr(mod, namei))
+
+    def delete_name_op(self, namei: str) -> None:
+        del self.locals[namei]
+
+    def delete_global_op(self, namei: str) -> None:
+        del self.globals[namei]
+
+    def delete_fast_op(self, namei: str) -> None:
+        del self.locals[namei]
+
+    def load_attr_op(self, attr: str) -> None:
+        obj = self.pop()
+        val = getattr(obj, attr)
+        self.push(val)
+
+    def store_attr_op(self, name: str) -> None:
+        val, obj = self.popn(2)
+        setattr(obj, name, val)
+
+    def delete_attr_op(self, name: str) -> None:
+        obj = self.pop()
+        delattr(obj, name)
 
     #########
     # Jumps #
