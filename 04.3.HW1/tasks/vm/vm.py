@@ -27,6 +27,18 @@ class Frame:
         self.pc: int = 0
         self.next_pc: int = 0
 
+        self.instructions_need_arg = {
+            "JUMP_FORWARD",
+            "JUMP_BACKWARD",
+            "JUMP_BACKWARD_NO_INTERRUPT",
+            "POP_JUMP_IF_TRUE",
+            "POP_JUMP_IF_FALSE",
+            "POP_JUMP_IF_NOT_NONE",
+            "POP_JUMP_IF_NONE",
+            "FOR_ITER"
+        }
+
+
     def top(self) -> tp.Any:
         return self.data_stack[-1]
 
@@ -62,8 +74,8 @@ class Frame:
             self.next_pc = self.pc + 1
 
             opname = inst.opname
-            is_jump = opname.startswith("JUMP") or opname.startswith("POP_JUMP") or opname == "FOR_ITER"
-            arg = inst.arg if is_jump else inst.argval
+            needs_arg = opname in self.instructions_need_arg
+            arg = inst.arg if needs_arg else inst.argval
 
             getattr(self, opname.lower() + "_op")(arg)
             self.pc = self.next_pc
@@ -93,6 +105,7 @@ class Frame:
         self.pop()
 
     def end_for_op(self, arg: tp.Any) -> None:
+        # TODO: may it's a typo in docs (just pass)
         self.pop_top_op(arg)
 
     def copy_op(self, i: int) -> None:
@@ -118,7 +131,7 @@ class Frame:
     def unary_invert_op(self, arg: tp.Any) -> None:
         self.push(operator.invert(self.pop()))
 
-    def get_iter_op(self, argc: tp.Any) -> None:
+    def get_iter_op(self, arg: tp.Any) -> None:
         self.push(iter(self.pop()))
 
     # def get_yield_from_iter_op(self, arg: tp.Any) -> None:
@@ -366,9 +379,9 @@ class Frame:
             start, stop, step = self.popn(3)
             self.push(slice(start, stop, step))
 
-    def extended_arg_op(self, arg: tp.Any) -> None:
-        # TODO
-        pass
+    # def extended_arg_op(self, arg: tp.Any) -> None:
+    #     # TODO
+    #     pass
 
     def convert_value_op(self, oparg: int) -> None:
         value = self.pop()
@@ -472,6 +485,15 @@ class Frame:
         if v:
             self._jump_forward(delta)
 
+    def jump_forward_op(self, delta: int) -> None:
+        self._jump_forward(delta)
+
+    def jump_backward_op(self, delta: int) -> None:
+        self._jump_backward(delta)
+
+    def jump_backward_no_interrupt_op(self, delta: int) -> None:
+        self._jump_backward(delta)
+
     def pop_jump_if_false_op(self, delta: int) -> None:
         v = self.pop()
         if not isinstance(v, bool):
@@ -487,14 +509,14 @@ class Frame:
         if self.pop() is not None:
             self._jump_forward(delta)
 
-    def jump_forward_op(self, delta: int) -> None:
-        self._jump_forward(delta)
-
-    def jump_backward_op(self, delta: int) -> None:
-        self._jump_backward(delta)
-
-    def jump_backward_no_interrupt_op(self, delta: int) -> None:
-        self._jump_backward(delta)
+    # def for_iter_op(self, delta: int) -> None:
+    #     iterator = self.top()
+    #     try:
+    #         value = next(iterator)
+    #         self.push(value)
+    #     except StopIteration:
+    #         # self.pop()
+    #         self._jump_forward(delta)
 
 class VirtualMachine:
     def run(self, code_obj: types.CodeType) -> None:
