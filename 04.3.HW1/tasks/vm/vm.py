@@ -65,6 +65,10 @@ class Frame:
     def precall_op(self, arg: int) -> tp.Any:
         pass
 
+    ##################################
+    # Binary and in-place operations #
+    ##################################
+
     def binary_op_op(self, arg: int) -> None:
         """
         https://github.com/python/cpython/blob/main/Include/opcode.h
@@ -93,6 +97,31 @@ class Frame:
 
         res = op(lhs, rhs)
         self.push(res)
+
+    def binary_subscr_op(self, arg: int) -> None:
+        container, key = self.popn(2)
+        self.push(container[key])
+
+    def store_subscr_op(self, arg: int) -> None:
+        value, container, key = self.popn(3)
+        container[key] = value
+
+    def delete_subscr_op(self, arg: int):
+        container, key = self.popn(2)
+        del container[key]
+
+    def binary_slice_op(self, arg: int) -> None:
+        container, start, end = self.popn(3)
+        self.push(container[start:end])
+
+    def store_slice_op(self, arg: int) -> None:
+        values, container, start, end = self.popn(4)
+        container[start:end] = values
+
+    ######################
+    # Coroutine opcodes #
+    ######################
+    # TODO
 
     def call_op(self, argc: int) -> None:
         args = self.popn(argc)
@@ -249,15 +278,6 @@ class Frame:
         if argc == 3:
             start, stop, step = self.popn(3)
             self.push(slice(start, stop, step))
-
-    def binary_slice_op(self, arg: int) -> None:
-        container, start, end = self.popn(3)
-        self.push(container[start:end])
-
-    def binary_subscr_op(self, arg: tp.Any) -> None:
-        tos = self.pop()
-        tos1 = self.pop()
-        self.push(tos1[tos])
 
     def compare_op_op(self, op: str) -> None:
         lhs, rhs = self.popn(2)
