@@ -34,6 +34,8 @@ class Frame:
             "STORE_FAST_STORE_FAST",
             "STORE_FAST_LOAD_FAST",
 
+            "SET_FUNCTION_ATTRIBUTE"
+
             "JUMP_FORWARD",
             "JUMP_BACKWARD",
             "JUMP_BACKWARD_NO_INTERRUPT",
@@ -413,26 +415,26 @@ class Frame:
         if '__annotations__' not in self.locals.keys():
             self.locals['__annotations__'] = dict()
 
-    def make_function_op(self, arg: int) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
-        """
-        code = self.pop()  # the code associated with the function (at TOS1)
+    # def make_function_op(self, arg: int) -> None:
+    #     """
+    #     Operation description:
+    #         https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
+    #     """
+    #     code = self.pop()  # the code associated with the function (at TOS1)
 
-        # TODO: use arg to parse function defaults
+    #     # TODO: use arg to parse function defaults
 
-        def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
-            # TODO: parse input arguments using code attributes such as co_argcount
+    #     def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
+    #         # TODO: parse input arguments using code attributes such as co_argcount
 
-            parsed_args: dict[str, tp.Any] = {}
-            f_locals = dict(self.locals)
-            f_locals.update(parsed_args)
+    #         parsed_args: dict[str, tp.Any] = {}
+    #         f_locals = dict(self.locals)
+    #         f_locals.update(parsed_args)
 
-            frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
-            return frame.run()
+    #         frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
+    #         return frame.run()
 
-        self.push(f)
+    #     self.push(f)
 
     # def make_function_op(self, arg: int) -> None:
     #     code = self.pop()
@@ -449,6 +451,29 @@ class Frame:
     #         return frame.run()
 
     #     self.push(f)
+
+    def make_function_op(self, arg: int) -> None:
+        code = self.pop()
+        class FTProxy:
+            def __init__(self, co: types.CodeType):
+                self.__code__ = co
+                self.__defaults__ = None
+                self.__kwdefaults__ = None
+                self.__annotations__ = {}
+
+        sig_proxy = FTProxy(code)
+
+        def f(*call_args: tp.Any, **call_kwargs: tp.Any) -> tp.Any:
+            sig = sig_proxy
+            bound_locals = bind_args(sig, *call_args, **call_kwargs)
+
+            callee_locals = dict(self.locals)
+            callee_locals.update(bound_locals)
+
+            frame = Frame(code, self.builtins, self.globals, callee_locals)
+            return frame.run()
+
+        self.push(f)
 
     def call_function_ex_op(self, flags: int) -> None:
         if flags == 1:
@@ -704,7 +729,7 @@ class VirtualMachine:
         frame = Frame(code_obj, builtins.globals()['__builtins__'], globals_context, globals_context)
         return frame.run()
 
-def bind_args(func: types.FunctionType, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
+def bind_args(func, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
     """Bind values from `args` and `kwargs` to corresponding arguments of `func`
 
     :param func: function to be inspected
