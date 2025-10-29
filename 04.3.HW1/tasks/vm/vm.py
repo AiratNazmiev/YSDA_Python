@@ -31,6 +31,8 @@ class Frame:
             "LOAD_GLOBAL",
             "LOAD_FAST_LOAD_FAST",
             "LOAD_ATTR",
+            "STORE_FAST_STORE_FAST",
+            "STORE_FAST_LOAD_FAST",
 
             "JUMP_FORWARD",
             "JUMP_BACKWARD",
@@ -196,10 +198,33 @@ class Frame:
         values, container, start, end = self.popn(4)
         container[start:end] = values
 
-    ######################
+    #####################
     # Coroutine opcodes #
-    ######################
+    #####################
     # TODO
+
+    #########################
+    # Miscellaneous opcodes #
+    #########################
+
+    def set_add_op(self, i: int) -> None:
+        s = self.pop()
+        set.add(self.data_stack[-i], s)
+
+    def list_append_op(self, i: int) -> None:
+        lst = self.pop()
+        list.append(self.data_stack[-i], lst)
+
+    def map_add_op(self, i: int) -> None:
+        value = self.pop()
+        key = self.pop()
+        dict.__setitem__(self.data_stack[-i], key, value)
+
+    def load_assertion_error_op(self, arg: tp.Any) -> None:
+        self.push(AssertionError)
+
+    def get_len_op(self, arg: tp.Any) -> None:
+        self.push(len(self.data_stack[-1]))
 
     def call_op(self, argc: int) -> None:
         args = self.popn(argc)
@@ -333,12 +358,35 @@ class Frame:
         self.push(v1)
         self.push(v2)
 
+    def load_fast_check_op(self, var_num: str) -> None:
+        value = self.locals.get(var_num)
+        if value is None:
+            raise UnboundLocalError
+        self.push(value)
+
     def load_fast_and_clear_op(self, var_name: str) -> None:
         value = self.locals.pop(var_name, None)  # None == NULL when uninitialized
         self.push(value)
 
     def store_fast_op(self, var_num: str) -> None:
         self.locals[var_num] = self.pop()
+
+    def store_fast_store_fast_op(self, var_nums: int) -> None:
+        idx1 = (var_nums >> 4)
+        idx2 = (var_nums & 0x0F)
+
+        name1 = self.code.co_varnames[idx1]
+        name2 = self.code.co_varnames[idx2]
+
+        v1 = self.data_stack[-1]
+        v2 = self.data_stack[-2]
+
+        self.locals[name2] = v2
+        self.locals[name1] = v1
+
+    def store_fast_load_fast_op(self, var_nums: int):
+        self.locals[self.code.co_varnames[var_nums >> 4]] = self.pop()
+        self.push(self.locals[self.code.co_varnames[var_nums & 0x0F]])
 
     def load_const_op(self, arg: tp.Any) -> None:
         """
@@ -361,6 +409,10 @@ class Frame:
         """
         self.return_value = arg
 
+    def setup_annotations_op(self, arg: tp.Any) -> None:
+        if '__annotations__' not in self.locals.keys():
+            self.locals['__annotations__'] = dict()
+
     def make_function_op(self, arg: int) -> None:
         """
         Operation description:
@@ -382,21 +434,6 @@ class Frame:
 
         self.push(f)
 
-    def call_function_ex_op(self, flags: int) -> None:
-        if flags == 1:
-            kwargs = self.pop()
-            posargs = self.pop()
-            function = self.pop()
-            if bool(posargs):
-                self.push(function(*posargs, **kwargs))
-            else:
-                self.push(function(**kwargs))
-        else:
-            posargs = self.pop()
-            function = self.pop()
-            self.push(function(*posargs))
-        pass
-
     # def make_function_op(self, arg: int) -> None:
     #     code = self.pop()
 
@@ -412,6 +449,21 @@ class Frame:
     #         return frame.run()
 
     #     self.push(f)
+
+    def call_function_ex_op(self, flags: int) -> None:
+        if flags == 1:
+            kwargs = self.pop()
+            posargs = self.pop()
+            function = self.pop()
+            if bool(posargs):
+                self.push(function(*posargs, **kwargs))
+            else:
+                self.push(function(**kwargs))
+        else:
+            posargs = self.pop()
+            function = self.pop()
+            self.push(function(*posargs))
+        pass
 
     def store_name_op(self, arg: str) -> None:
         """
@@ -475,9 +527,9 @@ class Frame:
             start, stop, step = self.popn(3)
             self.push(slice(start, stop, step))
 
-    # def extended_arg_op(self, arg: tp.Any) -> None:
-    #     # TODO
-    #     pass
+    def extended_arg_op(self, arg: tp.Any) -> None:
+        # TODO
+        pass
 
     def convert_value_op(self, oparg: int) -> None:
         value = self.pop()
@@ -548,6 +600,9 @@ class Frame:
     def delete_name_op(self, namei: str) -> None:
         del self.locals[namei]
 
+    def unpack_sequence_op(self, count: int):
+        self.push(*self.pop()[:-count-1:-1])
+
     def delete_global_op(self, namei: str) -> None:
         del self.globals[namei]
 
@@ -555,35 +610,15 @@ class Frame:
         del self.locals[namei]
 
     def load_attr_op(self, namei: int) -> None:
-        idx = namei >> 1
-        is_method_form = (namei & 1) == 1
-
-        name = self.code.co_names[idx]
-
-        if not is_method_form:
-            obj = self.top()
-            attr = getattr(obj, name)
-            self.data_stack[-1] = attr
-            return
-
         obj = self.pop()
+        name = self.code.co_names[namei >> 1]
         attr = getattr(obj, name)
 
-        bound_to_obj = getattr(attr, "__self__", None) is obj
-
-        if bound_to_obj:
-            func = getattr(attr, "__func__", None)
-            if func is None:
-                self.push(attr)
-                self.push(None)
-                return
-
-            self.push(func)
-            self.push(obj)
-        else:
+        if (namei & 1) == 0:
             self.push(attr)
-            self.push(None)
+            return
 
+        self.push(attr, None)
 
     def store_attr_op(self, name: str) -> None:
         val, obj = self.popn(2)
@@ -592,6 +627,10 @@ class Frame:
     def delete_attr_op(self, name: str) -> None:
         obj = self.pop()
         delattr(obj, name)
+
+    def store_global_op(self, namei: str) -> None:
+        const = self.pop()
+        self.globals[namei] = const
 
     #########
     # Jumps #
