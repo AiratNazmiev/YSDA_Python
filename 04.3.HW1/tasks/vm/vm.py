@@ -382,6 +382,21 @@ class Frame:
 
         self.push(f)
 
+    def call_function_ex_op(self, flags: int) -> None:
+        if flags == 1:
+            kwargs = self.pop()
+            posargs = self.pop()
+            function = self.pop()
+            if bool(posargs):
+                self.push(function(*posargs, **kwargs))
+            else:
+                self.push(function(**kwargs))
+        else:
+            posargs = self.pop()
+            function = self.pop()
+            self.push(function(*posargs))
+        pass
+
     # def make_function_op(self, arg: int) -> None:
     #     code = self.pop()
 
@@ -420,23 +435,37 @@ class Frame:
 
     def build_map_op(self, count: int) -> None:
         values = self.popn(2*count)
-        new_map = {values[2*idx]: values[2*idx+1] for idx in range(count)}
+        m = {values[2*idx]: values[2*idx+1] for idx in range(count)}
 
-        self.push(new_map)
+        self.push(m)
+
+    def build_const_key_map_op(self, count: int) -> None:
+        keys = self.pop()
+        values = self.popn(count)
+        m = {keys[idx]: values[idx] for idx in range(count)}
+
+        self.data_stack.append(m)
 
     def build_string_op(self, count: int) -> None:
         fragments = self.popn(count)
         string = "".join(fragments)
         self.push(string)
 
-    def list_extend_op(self, i: int) -> None:
-        tos = self.pop()
-        tos1 = self.pop()
-        if len(tos1) == 0:
-            list.extend(tos1, tos)
-        else:
-            list.extend(tos1, tos)
-        self.push(tos1)
+    def list_extend_op(self, i: int):
+        lst = self.pop()
+        list.extend(self.data_stack[-i], lst)
+
+    def set_update_op(self, i: int) -> None:
+        s = self.pop()
+        set.update(self.data_stack[-i], s)
+
+    def dict_update_op(self, i: int) -> None:
+        m = self.pop()
+        dict.update(self.data_stack[-i], m)
+
+    def dict_merge_op(self, i: int) -> None:
+        m = self.pop()
+        dict.update(self.data_stack[-i], m)
 
     def build_slice_op(self, argc: int) -> None:
         if argc == 2:
