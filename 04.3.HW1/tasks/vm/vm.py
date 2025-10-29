@@ -20,32 +20,13 @@ class Frame:
         self.builtins = frame_builtins
         self.globals = frame_globals
         self.locals = frame_locals
-        self.data_stack: tp.Any = []
+        self.data_stack: list[tp.Any] = []
         self.return_value = None
 
         self.instructions: list[dis.Instruction] = list(dis.get_instructions(self.code))
+        self._off2idx: dict[int, int] = {inst.offset: i for i, inst in enumerate(self.instructions)}
         self.pc: int = 0
         self.next_pc: int = 0
-
-        self.instructions_need_arg = {
-            "LOAD_GLOBAL",
-            "LOAD_FAST_LOAD_FAST",
-            "LOAD_ATTR",
-            "STORE_FAST_STORE_FAST",
-            "STORE_FAST_LOAD_FAST",
-
-            "SET_FUNCTION_ATTRIBUTE"
-
-            "JUMP_FORWARD",
-            "JUMP_BACKWARD",
-            "JUMP_BACKWARD_NO_INTERRUPT",
-            "POP_JUMP_IF_TRUE",
-            "POP_JUMP_IF_FALSE",
-            "POP_JUMP_IF_NOT_NONE",
-            "POP_JUMP_IF_NONE",
-            "FOR_ITER"
-        }
-
 
     def top(self) -> tp.Any:
         return self.data_stack[-1]
@@ -59,37 +40,36 @@ class Frame:
     def push(self, *values: tp.Any) -> None:
         self.data_stack.extend(values)
 
-    def popn(self, n: int) -> tp.Any:
-        """
-        Pop a number of values from the value stack.
-        A list of n values is returned, the deepest value first.
-        """
+    def popn(self, n: int) -> list[tp.Any]:
         if n > 0:
             returned = self.data_stack[-n:]
             self.data_stack[-n:] = []
             return returned
-        else:
-            return []
-
-    # def run(self) -> tp.Any:
-    #     for instruction in dis.get_instructions(self.code):
-    #         getattr(self, instruction.opname.lower() + "_op")(instruction.argval)
-    #     return self.return_value
+        return []
 
     def run(self) -> tp.Any:
+        RAW_ARG_OPS = {
+            "LOAD_GLOBAL", "LOAD_ATTR",
+            "LOAD_FAST_LOAD_FAST", "STORE_FAST_STORE_FAST", "STORE_FAST_LOAD_FAST",
+            "SET_FUNCTION_ATTRIBUTE",
+        }
+
         while self.pc < len(self.instructions):
             inst = self.instructions[self.pc]
             self.next_pc = self.pc + 1
 
             opname = inst.opname
-            needs_arg = opname in self.instructions_need_arg
-            arg = inst.arg if needs_arg else inst.argval
+            if opname in RAW_ARG_OPS:
+                arg = inst.arg
+            else:
+                arg = inst.argval
 
             getattr(self, opname.lower() + "_op")(arg)
             self.pc = self.next_pc
 
         return self.return_value
 
+    # ---------- simple/misc ops ----------
     def nop_op(self, arg: tp.Any) -> None:
         pass
 
@@ -106,16 +86,10 @@ class Frame:
         self.push(builtins.__build_class__)
 
     def pop_top_op(self, arg: tp.Any) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-POP_TOP
-        """
         self.pop()
 
     def end_for_op(self, arg: tp.Any) -> None:
-        # TODO: may it's a typo in docs (just pass)
-        #self.pop_top_op(arg)
-        pass
+        self.pop()
 
     def copy_op(self, i: int) -> None:
         assert i > 0
@@ -124,10 +98,7 @@ class Frame:
     def swap_op(self, i: int) -> None:
         self.data_stack[-i], self.data_stack[-1] = self.data_stack[-1], self.data_stack[-i]
 
-    ####################
-    # Unary operations #
-    ####################
-
+    # ---------- unary ops ----------
     def unary_positive_op(self, arg: tp.Any) -> None:
         self.push(operator.pos(self.pop()))
 
@@ -143,20 +114,11 @@ class Frame:
     def get_iter_op(self, arg: tp.Any) -> None:
         self.push(iter(self.pop()))
 
-    # def get_yield_from_iter_op(self, arg: tp.Any) -> None:
-    #     ...
-
     def to_bool_op(self, arg: tp.Any) -> None:
         self.push(bool(self.pop()))
 
-    ##################################
-    # Binary and in-place operations #
-    ##################################
-
+    # ---------- binary ops ----------
     def binary_op_op(self, arg: int) -> None:
-        """
-        https://github.com/python/cpython/blob/main/Include/opcode.h
-        """
         lhs, rhs = self.popn(2)
         ops = {
             0: operator.add,
@@ -173,12 +135,10 @@ class Frame:
             11: operator.truediv,
             12: operator.xor
         }
-
-        if (op := ops.get(arg % 13)) is None:
+        op = ops.get(arg % 13)
+        if op is None:
             raise NameError
-
-        res = op(lhs, rhs)
-        self.push(res)
+        self.push(op(lhs, rhs))
 
     def binary_subscr_op(self, arg: int) -> None:
         container, key = self.popn(2)
@@ -188,7 +148,7 @@ class Frame:
         value, container, key = self.popn(3)
         container[key] = value
 
-    def delete_subscr_op(self, arg: int):
+    def delete_subscr_op(self, arg: int) -> None:
         container, key = self.popn(2)
         del container[key]
 
@@ -200,39 +160,11 @@ class Frame:
         values, container, start, end = self.popn(4)
         container[start:end] = values
 
-    #####################
-    # Coroutine opcodes #
-    #####################
-    # TODO
-
-    #########################
-    # Miscellaneous opcodes #
-    #########################
-
-    def set_add_op(self, i: int) -> None:
-        s = self.pop()
-        set.add(self.data_stack[-i], s)
-
-    def list_append_op(self, i: int) -> None:
-        lst = self.pop()
-        list.append(self.data_stack[-i], lst)
-
-    def map_add_op(self, i: int) -> None:
-        value = self.pop()
-        key = self.pop()
-        dict.__setitem__(self.data_stack[-i], key, value)
-
-    def load_assertion_error_op(self, arg: tp.Any) -> None:
-        self.push(AssertionError)
-
-    def get_len_op(self, arg: tp.Any) -> None:
-        self.push(len(self.data_stack[-1]))
-
+    # ---------- CALL ----------
     def call_op(self, argc: int) -> None:
         args = self.popn(argc)
         self_or_null = self.pop()
         func = self.pop()
-
         if self_or_null is not None:
             bound_self = getattr(func, "__self__", None)
             if bound_self is not None:
@@ -241,27 +173,21 @@ class Frame:
                 result = func(self_or_null, *args)
         else:
             result = func(*args)
-
         self.push(result)
 
     def call_kw_op(self, argc: int) -> None:
         names = self.pop()
         if not isinstance(names, tuple) or not all(isinstance(k, str) for k in names):
             raise TypeError("CALL_KW expects a tuple of keyword names on TOS")
-
         nkw = len(names)
         nargs = argc - nkw
         if nargs < 0:
             raise ValueError("CALL_KW: argc smaller than number of keyword names")
-
         kw_values = self.popn(nkw)
         pos_args = self.popn(nargs)
-
         self_or_null = self.pop()
         func = self.pop()
-
         kwargs = {k: v for k, v in zip(names, kw_values)}
-
         if self_or_null is not None:
             bound_self = getattr(func, "__self__", None)
             if bound_self is not None:
@@ -270,16 +196,10 @@ class Frame:
                 result = func(self_or_null, *pos_args, **kwargs)
         else:
             result = func(*pos_args, **kwargs)
-
         self.push(result)
 
+    # ---------- names / globals / fast locals ----------
     def load_name_op(self, arg: str) -> None:
-        """
-        Partial realization
-
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-LOAD_NAME
-        """
         if arg in self.locals:
             self.push(self.locals[arg])
         elif arg in self.globals:
@@ -289,89 +209,46 @@ class Frame:
         else:
             raise NameError(f"Name {arg} is not defined")
 
-    # def load_global_op(self, arg: str) -> None:
-    #     # TODO: smth strange with lower bits, inst.arg vs inst.argval
-    #     if arg in self.globals:
-    #         val = self.globals[arg]
-    #     elif arg in self.builtins:
-    #         val = self.builtins[arg]
-    #     else:
-    #         raise NameError(f"global name {arg!r} is not defined")
-
-    #     # Push the callable/value and a NULL sentinel for CALL
-    #     self.push(val)
-    #     self.push(None)
-
-    # def load_global_op(self, namei: int) -> None:
-    #     idx = namei >> 1
-    #     push_null = (namei & 1) != 0
-
-    #     try:
-    #         name = self.code.co_names[idx]
-    #     except IndexError:
-    #         raise RuntimeError(f"LOAD_GLOBAL: bad co_names index {idx}")
-
-    #     if name in self.globals:
-    #         val = self.globals[name]
-    #     elif name in self.builtins:
-    #         val = self.builtins[name]
-    #     else:
-    #         raise NameError(f"name {name} is not defined")
-
-    #     if push_null:
-    #         self.push(None)
-    #     self.push(val)
-
     def load_global_op(self, namei: int) -> None:
-        # TODO: If the low bit of namei is set, then a NULL is pushed to the stack before the global variable.
-        # but more tests are passed with reversed ordering
         idx = namei >> 1
         push_null = (namei & 1) != 0
-
         try:
             name = self.code.co_names[idx]
         except IndexError:
             raise RuntimeError(f"LOAD_GLOBAL: bad co_names index {idx}")
-
         if name in self.globals:
             val = self.globals[name]
         elif name in self.builtins:
             val = self.builtins[name]
         else:
             raise NameError(f"name {name} is not defined")
-
         self.push(val)
         if push_null:
             self.push(None)
 
-    def load_fast_op(self, var_num: str) -> None:
-        self.push(self.locals[var_num])
+    def load_fast_op(self, var_name: str) -> None:
+        self.push(self.locals[var_name])
 
     def load_fast_load_fast_op(self, var_nums: int) -> None:
         idx1 = (var_nums >> 4)
         idx2 = (var_nums & 0x0F)
-
         name1 = self.code.co_varnames[idx1]
         name2 = self.code.co_varnames[idx2]
+        self.push(self.locals[name1])
+        self.push(self.locals[name2])
 
-        v1 = self.locals[name1]
-        v2 = self.locals[name2]
-
-        self.push(v1)
-        self.push(v2)
-
-    def load_fast_check_op(self, var_num: str) -> None:
-        value = self.locals.get(var_num)
+    def load_fast_check_op(self, var_name: str) -> None:
+        value = self.locals.get(var_name)
         if value is None:
             raise UnboundLocalError
         self.push(value)
 
     def load_fast_and_clear_op(self, var_name: str) -> None:
-        value = self.locals.pop(var_name, None)  # None == NULL when uninitialized
+        value = self.locals.pop(var_name, None)
         self.push(value)
 
-    def store_fast_op(self, var_num: str) -> None:
-        self.locals[var_num] = self.pop()
+    def store_fast_op(self, var_name: str) -> None:
+        self.locals[var_name] = self.pop()
 
     def store_fast_store_fast_op(self, var_nums: int) -> None:
         idx1 = (var_nums >> 4)
@@ -386,74 +263,28 @@ class Frame:
         self.locals[name2] = v2
         self.locals[name1] = v1
 
-    def store_fast_load_fast_op(self, var_nums: int):
+    def store_fast_load_fast_op(self, var_nums: int) -> None:
         self.locals[self.code.co_varnames[var_nums >> 4]] = self.pop()
         self.push(self.locals[self.code.co_varnames[var_nums & 0x0F]])
 
+    # ---------- const / return ----------
     def load_const_op(self, arg: tp.Any) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-LOAD_CONST
-        """
         self.push(arg)
 
     def return_value_op(self, arg: tp.Any) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-RETURN_VALUE
-        """
         self.return_value = self.pop()
 
     def return_const_op(self, arg: tp.Any) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-RETURN_VALUE
-        """
         self.return_value = arg
 
     def setup_annotations_op(self, arg: tp.Any) -> None:
-        if '__annotations__' not in self.locals.keys():
-            self.locals['__annotations__'] = dict()
+        if "__annotations__" not in self.locals:
+            self.locals["__annotations__"] = {}
 
-    # def make_function_op(self, arg: int) -> None:
-    #     """
-    #     Operation description:
-    #         https://docs.python.org/release/3.13.7/library/dis.html#opcode-MAKE_FUNCTION
-    #     """
-    #     code = self.pop()  # the code associated with the function (at TOS1)
-
-    #     # TODO: use arg to parse function defaults
-
-    #     def f(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
-    #         # TODO: parse input arguments using code attributes such as co_argcount
-
-    #         parsed_args: dict[str, tp.Any] = {}
-    #         f_locals = dict(self.locals)
-    #         f_locals.update(parsed_args)
-
-    #         frame = Frame(code, self.builtins, self.globals, f_locals)  # Run code in prepared environment
-    #         return frame.run()
-
-    #     self.push(f)
-
-    # def make_function_op(self, arg: int) -> None:
-    #     code = self.pop()
-
-    #     sig_func = types.FunctionType(code, self.globals, code.co_name)
-
-    #     def f(*call_args: tp.Any, **call_kwargs: tp.Any) -> tp.Any:
-    #         bound_locals = bind_args(sig_func, *call_args, **call_kwargs)
-
-    #         callee_locals = dict(self.locals)
-    #         callee_locals.update(bound_locals)
-
-    #         frame = Frame(code, self.builtins, self.globals, callee_locals)
-    #         return frame.run()
-
-    #     self.push(f)
-
+    # ---------- MAKE_FUNCTION + attributes ----------
     def make_function_op(self, arg: int) -> None:
         code = self.pop()
+
         class FTProxy:
             def __init__(self, co: types.CodeType):
                 self.__code__ = co
@@ -466,14 +297,27 @@ class Frame:
         def f(*call_args: tp.Any, **call_kwargs: tp.Any) -> tp.Any:
             sig = sig_proxy
             bound_locals = bind_args(sig, *call_args, **call_kwargs)
-
             callee_locals = dict(self.locals)
             callee_locals.update(bound_locals)
-
             frame = Frame(code, self.builtins, self.globals, callee_locals)
             return frame.run()
 
         self.push(f)
+
+    def set_function_attribute_op(self, flag: int) -> None:
+        func = self.pop()
+        value = self.pop()
+
+        target = func
+        if flag == 0x01:
+            target.__defaults__ = None if value is None else tuple(value)
+        elif flag == 0x02:
+            target.__kwdefaults__ = None if value is None else dict(value)
+        elif flag == 0x04:
+            target.__annotations__ = value
+        elif flag == 0x08:
+            pass
+        self.push(func)
 
     def call_function_ex_op(self, flags: int) -> None:
         if flags == 1:
@@ -488,100 +332,100 @@ class Frame:
             posargs = self.pop()
             function = self.pop()
             self.push(function(*posargs))
-        pass
 
-    def store_name_op(self, arg: str) -> None:
-        """
-        Operation description:
-            https://docs.python.org/release/3.13.7/library/dis.html#opcode-STORE_NAME
-        """
-        const = self.pop()
-        self.locals[arg] = const
+    def store_name_op(self, name: str) -> None:
+        self.locals[name] = self.pop()
 
+    # ---------- builders ----------
     def build_tuple_op(self, count: int) -> None:
-        elts = tuple(self.popn(count))
-        self.push(elts)
+        self.push(tuple(self.popn(count)))
 
     def build_list_op(self, count: int) -> None:
-        elts = list(self.popn(count))
-        self.push(elts)
+        self.push(list(self.popn(count)))
 
     def build_set_op(self, count: int) -> None:
-        elts = set(self.popn(count))
-        self.push(elts)
+        self.push(set(self.popn(count)))
 
     def build_map_op(self, count: int) -> None:
-        values = self.popn(2*count)
-        m = {values[2*idx]: values[2*idx+1] for idx in range(count)}
-
+        vals = self.popn(2 * count)
+        m = {vals[2 * i]: vals[2 * i + 1] for i in range(count)}
         self.push(m)
 
     def build_const_key_map_op(self, count: int) -> None:
         keys = self.pop()
         values = self.popn(count)
-        m = {keys[idx]: values[idx] for idx in range(count)}
-
-        self.data_stack.append(m)
+        m = {keys[i]: values[i] for i in range(count)}
+        self.push(m)
 
     def build_string_op(self, count: int) -> None:
-        fragments = self.popn(count)
-        string = "".join(fragments)
-        self.push(string)
+        self.push("".join(self.popn(count)))
+
+    # ---------- list/set/dict updates ----------
+    def list_append_op(self, i: int) -> None:
+        v = self.pop()
+        self.data_stack[-i].append(v)
 
     def list_extend_op(self, i: int):
         lst = self.pop()
         list.extend(self.data_stack[-i], lst)
 
+    def set_add_op(self, i: int) -> None:
+        v = self.pop()
+        self.data_stack[-i].add(v)
+
+    def map_add_op(self, i: int) -> None:
+        value = self.pop()
+        key = self.pop()
+        self.data_stack[-i][key] = value
+
     def set_update_op(self, i: int) -> None:
         s = self.pop()
-        set.update(self.data_stack[-i], s)
+        self.data_stack[-i].update(s)
 
     def dict_update_op(self, i: int) -> None:
         m = self.pop()
-        dict.update(self.data_stack[-i], m)
+        self.data_stack[-i].update(m)
 
     def dict_merge_op(self, i: int) -> None:
         m = self.pop()
-        dict.update(self.data_stack[-i], m)
+        self.data_stack[-i].update(m)
 
+    # ---------- slicing ----------
     def build_slice_op(self, argc: int) -> None:
         if argc == 2:
             start, stop = self.popn(2)
             self.push(slice(start, stop))
-        if argc == 3:
+        elif argc == 3:
             start, stop, step = self.popn(3)
             self.push(slice(start, stop, step))
 
     def extended_arg_op(self, arg: tp.Any) -> None:
-        # TODO
         pass
 
+    # ---------- formatting ----------
     def convert_value_op(self, oparg: int) -> None:
-        value = self.pop()
-        #print(f'{oparg=}')
+        v = self.pop()
         if oparg == 0:
-            result = value
+            self.push(v)
         elif oparg == 1:
-            result = str(value)
+            self.push(str(v))
         elif oparg == 2:
-            result = repr(value)
+            self.push(repr(v))
         elif oparg == 3:
-            result = ascii(value)
+            self.push(ascii(v))
         else:
-            result = str(value) #raise ValueError("Unknown oparg code")
-        self.push(result)
+            self.push(v)
 
     def format_simple_op(self, arg: tp.Any) -> None:
-        value = self.pop()
-        result = value.__format__("")
-        self.push(result)
+        v = self.pop()
+        self.push(v.__format__(""))
 
     def format_with_spec_op(self, arg: tp.Any) -> None:
         spec = self.pop()
-        value = self.pop()
-        result = value.__format__(spec)
-        self.push(result)
+        v = self.pop()
+        self.push(v.__format__(spec))
 
+    # ---------- comparisons ----------
     def compare_op_op(self, op: str) -> None:
         lhs, rhs = self.popn(2)
         ops = {
@@ -592,7 +436,8 @@ class Frame:
             ">": lambda x, y: x > y,
             ">=": lambda x, y: x >= y,
         }
-        if (comp := ops.get(op)) is None:
+        comp = ops.get(op)
+        if comp is None:
             raise NameError
         self.push(comp(lhs, rhs))
 
@@ -604,29 +449,13 @@ class Frame:
         lhs, rhs = self.popn(2)
         self.push(bool((lhs is rhs) ^ invert))
 
-    ###########
-    # Imports #
-    ###########
-    # TODO: less tests are passed when uncomment
-    # def import_name_op(self, namei: str) -> None:
-    #     level, fromlist = self.popn(2)
-    #     self.push(__import__(namei, self.globals, self.locals, fromlist, level))
-
-    # def import_star_op(self, arg: tp.Any) -> None:
-    #     mod = self.pop()
-    #     for attr in dir(mod):
-    #         if attr[0] != '_':
-    #             self.locals[attr] = getattr(mod, attr)
-
-    # def import_from_op(self, namei: str) -> None:
-    #     mod = self.top()
-    #     self.push(getattr(mod, namei))
-
+    # ---------- deletes / attrs / globals ----------
     def delete_name_op(self, namei: str) -> None:
         del self.locals[namei]
 
     def unpack_sequence_op(self, count: int):
-        self.push(*self.pop()[:-count-1:-1])
+        seq = self.pop()
+        self.push(*seq[-1: -count - 1: -1])
 
     def delete_global_op(self, namei: str) -> None:
         del self.globals[namei]
@@ -638,12 +467,10 @@ class Frame:
         obj = self.pop()
         name = self.code.co_names[namei >> 1]
         attr = getattr(obj, name)
-
         if (namei & 1) == 0:
             self.push(attr)
-            return
-
-        self.push(attr, None)
+        else:
+            self.push(attr, None)
 
     def store_attr_op(self, name: str) -> None:
         val, obj = self.popn(2)
@@ -654,89 +481,85 @@ class Frame:
         delattr(obj, name)
 
     def store_global_op(self, namei: str) -> None:
-        const = self.pop()
-        self.globals[namei] = const
+        self.globals[namei] = self.pop()
 
-    #########
-    # Jumps #
-    #########
-    def _jump_forward(self, delta: int) -> None:
-        # Move to instruction after current, plus delta
-        self.next_pc = self.pc + 1 + int(delta)
+    # ---------- jumps (offset-based) ----------
+    def _jump_to_offset(self, target_offset: int) -> None:
+        try:
+            self.next_pc = self._off2idx[target_offset]
+        except KeyError:
+            raise RuntimeError(f"Bad jump target offset: {target_offset}")
 
-    def _jump_backward(self, delta: int) -> None:
-        # Move to instruction after current, minus delta
-        self.next_pc = self.pc + 1 - int(delta)
+    def jump_forward_op(self, target_offset: int) -> None:
+        self._jump_to_offset(target_offset)
 
-    def pop_jump_if_true_op(self, delta: int) -> None:
+    def jump_backward_op(self, target_offset: int) -> None:
+        self._jump_to_offset(target_offset)
+
+    def jump_backward_no_interrupt_op(self, target_offset: int) -> None:
+        self._jump_to_offset(target_offset)
+
+    def pop_jump_if_true_op(self, target_offset: int) -> None:
         v = self.pop()
         if not isinstance(v, bool):
             raise TypeError("POP_JUMP_IF_TRUE requires exact bool")
         if v:
-            self._jump_forward(delta)
+            self._jump_to_offset(target_offset)
 
-    def jump_forward_op(self, delta: int) -> None:
-        self._jump_forward(delta)
-
-    def jump_backward_op(self, delta: int) -> None:
-        self._jump_backward(delta)
-
-    def jump_backward_no_interrupt_op(self, delta: int) -> None:
-        self._jump_backward(delta)
-
-    def pop_jump_if_false_op(self, delta: int) -> None:
+    def pop_jump_if_false_op(self, target_offset: int) -> None:
         v = self.pop()
         if not isinstance(v, bool):
             raise TypeError("POP_JUMP_IF_FALSE requires exact bool")
         if not v:
-            self._jump_forward(delta)
+            self._jump_to_offset(target_offset)
 
-    def pop_jump_if_none_op(self, delta: int) -> None:
+    def pop_jump_if_none_op(self, target_offset: int) -> None:
         if self.pop() is None:
-            self._jump_forward(delta)
+            self._jump_to_offset(target_offset)
 
-    def pop_jump_if_not_none_op(self, delta: int) -> None:
+    def pop_jump_if_not_none_op(self, target_offset: int) -> None:
         if self.pop() is not None:
-            self._jump_forward(delta)
+            self._jump_to_offset(target_offset)
 
-    # def for_iter_op(self, delta: int) -> None:
-    #     iterator = self.top()
-    #     try:
-    #         value = next(iterator)
-    #         self.push(value)
-    #     except StopIteration:
-    #         # self.pop()
-    #         self._jump_forward(delta)
+    def for_iter_op(self, target_offset: int) -> None:
+        it = self.top()
+        try:
+            value = next(it)
+        except StopIteration:
+            self.push(None)  # ?
+            self._jump_to_offset(target_offset)
+        else:
+            self.push(value)  # stack: ..., iter, value
 
-    # def for_iter_op(self, delta: int) -> None:
-    #     it = self.top()  # keep iterator on stack while iterating
-    #     try:
-    #         value = next(it)
-    #     except StopIteration:
-    #         # Exhausted: remove iterator and jump past loop (and END_FOR)
-    #         self.pop()
-    #         self._jump_forward(delta)
-    #     else:
-    #         # Still iterating: push yielded value; iterator remains under it
-    #         self.push(value)
+    def import_name_op(self, namei: str) -> None:
+        level, fromlist = self.popn(2)
+        self.push(__import__(namei, self.globals, self.locals, fromlist, level))
+
+    def import_star_op(self, arg: tp.Any) -> None:
+        mod = self.pop()
+        for attr in dir(mod):
+            if attr[0] != '_':
+                self.locals[attr] = getattr(mod, attr)
+
+    def import_from_op(self, namei: str) -> None:
+        mod = self.top()
+        self.push(getattr(mod, namei))
+
+    def load_assertion_error_op(self, arg: tp.Any) -> None:
+        self.push(AssertionError)
+
 
 class VirtualMachine:
-    def run(self, code_obj: types.CodeType) -> None:
-        """
-        :param code_obj: code for interpreting
-        """
+    def run(self, code_obj: types.CodeType) -> tp.Any:
         globals_context: dict[str, tp.Any] = {}
         frame = Frame(code_obj, builtins.globals()['__builtins__'], globals_context, globals_context)
         return frame.run()
 
-def bind_args(func, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
-    """Bind values from `args` and `kwargs` to corresponding arguments of `func`
 
-    :param func: function to be inspected
-    :param args: positional arguments to be bound
-    :param kwargs: keyword arguments to be bound
-    :return: `dict[argument_name] = argument_value` if binding was successful,
-             raise TypeError with one of `ERR_*` error descriptions otherwise
+def bind_args(func, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
+    """
+    Your provided binder, unchanged except type loosened (we only read __code__,
+    __defaults__, __kwdefaults__).
     """
     CO_VARARGS = 4
     CO_VARKEYWORDS = 8
@@ -767,9 +590,8 @@ def bind_args(func, *args: tp.Any, **kwargs: tp.Any) -> dict[str, tp.Any]:
         idx += 1
     varkw_name = varnames[idx] if (flags & CO_VARKEYWORDS) else None
 
-
-    pos_defaults = func.__defaults__ or ()
-    kw_defaults = func.__kwdefaults__ or {}
+    pos_defaults = getattr(func, "__defaults__", None) or ()
+    kw_defaults = getattr(func, "__kwdefaults__", None) or {}
 
     all_pos_names = posonly_names + pos_or_kw_names
     pos_default_map: dict[str, tp.Any] = {}
