@@ -13,7 +13,6 @@ class SoftTimeoutException(TimeoutException):
 class HardTimeoutException(TimeoutException):
     pass
 
-
 class TimeCatcher:
     def __init__(
             self,
