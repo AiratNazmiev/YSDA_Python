@@ -372,3 +372,39 @@ $ git push origin main
 ```
 
 Попадайте в меню jupyter, в левой панели можно дойти до нужной лекции и открыть её.
+
+#### Как подключить cell-typeсhecker?
+
+```python
+import tempfile
+import subprocess
+from IPython.core.magic import register_cell_magic
+
+@register_cell_magic
+def typecheck(line: str, cell: str) -> None:
+    """Run pyrefly type checking on the given cell content."""
+    # store cell in a temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tmp:
+        tmp.write("\n" + cell)  # otherwise the row numbers do not correspond to the ones in jupyter -\_()_/-
+        tmp_path: str = tmp.name
+
+    # Build pyrefly command
+    cmd: list[str] = ["pyrefly", "check", "--output-format", "min-text", tmp_path] + line.split()
+
+    result: subprocess.CompletedProcess[str] = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+```
+
+```bash
+# Дописываем код выше в файл typecheck.py
+(shad_env)$ nano ~/.ipython/profile_default/startup/typecheck.py
+
+# Перезапускаем jupyter
+(shad_env)$ jupyter notebook
+```
+
+Для проверки типов добавить строчку `%%typecheck` в тестируемой ячейке.
