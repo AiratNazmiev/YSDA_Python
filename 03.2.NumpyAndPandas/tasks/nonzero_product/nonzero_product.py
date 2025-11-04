@@ -14,4 +14,4 @@ def nonzero_product(matrix: npt.NDArray[np.int_]) -> int | None:
     if len(nz_diag) == 0:
         return None
     else:
-        return np.prod(nz_diag)
+        return int(np.prod(nz_diag))
