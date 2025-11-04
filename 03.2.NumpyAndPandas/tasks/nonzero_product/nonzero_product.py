@@ -9,3 +9,9 @@ def nonzero_product(matrix: npt.NDArray[np.int_]) -> int | None:
     :param matrix: array,
     :return: product value or None
     """
+    diag = np.diagonal(matrix)
+    nz_diag = diag[np.nonzero(diag)]
+    if len(nz_diag) == 0:
+        return None
+    else:
+        return np.prod(nz_diag)
