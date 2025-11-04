@@ -9,9 +9,9 @@ from collections import Counter, defaultdict
 OPERATION_LEVELS = {
     "BEFORE_ASYNC_WITH": 4,
     "BEFORE_WITH": 3,
-    "BINARY_OP": 1,
-    "BINARY_SLICE": 1,
-    "BINARY_SUBSCR": 1,
+    "BINARY_OP": 1, #
+    "BINARY_SLICE": 1, #
+    "BINARY_SUBSCR": 1, #
     "BUILD_CONST_KEY_MAP": 2,
     "BUILD_LIST": 2,
     "BUILD_MAP": 2,
@@ -19,35 +19,35 @@ OPERATION_LEVELS = {
     "BUILD_SLICE": 2,
     "BUILD_STRING": 2,
     "BUILD_TUPLE": 2,
-    "CALL": 1,
+    "CALL": 1, #
     "CALL_FUNCTION_EX": 2,
     "CALL_INTRINSIC_1": 1,
     "CALL_INTRINSIC_2": 1,
-    "CALL_KW": 1,
+    "CALL_KW": 1, #
     "CHECK_EG_MATCH": 2,
     "CHECK_EXC_MATCH": 2,
     "CLEANUP_THROW": 4,
-    "COMPARE_OP": 1,
-    "CONTAINS_OP": 1,
-    "CONVERT_VALUE": 1,
-    "COPY": 1,
+    "COMPARE_OP": 1, #
+    "CONTAINS_OP": 1, #
+    "CONVERT_VALUE": 1, #
+    "COPY": 1, #
     "COPY_FREE_VARS": 3,
-    "DELETE_ATTR": 1,
+    "DELETE_ATTR": 1, #
     "DELETE_DEREF": 3,
-    "DELETE_FAST": 1,
-    "DELETE_GLOBAL": 1,
-    "DELETE_NAME": 1,
-    "DELETE_SUBSCR": 1,
+    "DELETE_FAST": 1, #
+    "DELETE_GLOBAL": 1, #
+    "DELETE_NAME": 1, #
+    "DELETE_SUBSCR": 1, #
     "DICT_MERGE": 2,
     "DICT_UPDATE": 2,
     "END_ASYNC_FOR": 4,
-    "END_FOR": 1,
+    "END_FOR": 1, #
     "END_SEND": 4,
-    "EXTENDED_ARG": 1,
+    "EXTENDED_ARG": 1, # TODO
     "FOR_ITER": 1,
     "FORMAT_SIMPLE": 1,
     "FORMAT_VALUE": 3,
-    "FORMAT_WITH_SPEC": 1,
+    "FORMAT_WITH_SPEC": 1,  #
     "GET_AITER": 4,
     "GET_ANEXT": 4,
     "GET_AWAITABLE": 4,
@@ -97,29 +97,29 @@ OPERATION_LEVELS = {
     "PUSH_NULL": 1,
     "RAISE_VARARGS": 1,
     "RERAISE": 1,
-    "RESUME": 1,
-    "RETURN_CONST": 1,
+    "RESUME": 1,  #
+    "RETURN_CONST": 1,  #
     "RETURN_GENERATOR": 4,
-    "RETURN_VALUE": 1,
+    "RETURN_VALUE": 1,  #
     "SEND": 4,
     "SET_ADD": 2,
     "SET_FUNCTION_ATTRIBUTE": 1,
     "SET_UPDATE": 2,
     "SETUP_ANNOTATIONS": 3,
-    "STORE_ATTR": 1,
+    "STORE_ATTR": 1, #
     "STORE_DEREF": 3,
-    "STORE_FAST": 1,
-    "STORE_FAST_LOAD_FAST": 1,
-    "STORE_FAST_STORE_FAST": 1,
-    "STORE_GLOBAL": 1,
-    "STORE_NAME": 1,
-    "STORE_SLICE": 1,
-    "STORE_SUBSCR": 1,
-    "SWAP": 1,
-    "TO_BOOL": 1,
-    "UNARY_INVERT": 1,
-    "UNARY_NEGATIVE": 1,
-    "UNARY_NOT": 1,
+    "STORE_FAST": 1, #
+    "STORE_FAST_LOAD_FAST": 1, #
+    "STORE_FAST_STORE_FAST": 1, #
+    "STORE_GLOBAL": 1, #
+    "STORE_NAME": 1, #
+    "STORE_SLICE": 1, #
+    "STORE_SUBSCR": 1, #
+    "SWAP": 1, #
+    "TO_BOOL": 1, #
+    "UNARY_INVERT": 1, #
+    "UNARY_NEGATIVE": 1, #
+    "UNARY_NOT": 1, #
     "UNPACK_EX": 2,
     "UNPACK_SEQUENCE": 2,
     "WITH_EXCEPT_START": 3,

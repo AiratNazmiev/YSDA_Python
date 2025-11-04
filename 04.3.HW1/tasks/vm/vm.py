@@ -292,10 +292,10 @@ class Frame:
                 self.__kwdefaults__ = None
                 self.__annotations__ = {}
 
-        sig_proxy = FTProxy(code)
+        ftproxy = FTProxy(code)
 
         def f(*call_args: tp.Any, **call_kwargs: tp.Any) -> tp.Any:
-            sig = sig_proxy
+            sig = ftproxy
             bound_locals = bind_args(sig, *call_args, **call_kwargs)
             callee_locals = dict(self.locals)
             callee_locals.update(bound_locals)
