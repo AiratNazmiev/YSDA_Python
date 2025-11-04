@@ -9,3 +9,11 @@ def replace_nans(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     :param matrix: matrix,
     :return: replaced matrix
     """
+    mask = np.isnan(matrix)
+    if mask.all():
+        return np.zeros_like(matrix)
+
+    mean = np.nanmean(matrix)
+    matrix[mask] = mean
+
+    return matrix
