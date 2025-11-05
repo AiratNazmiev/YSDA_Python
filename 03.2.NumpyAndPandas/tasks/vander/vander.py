@@ -8,3 +8,4 @@ def vander(array: npt.NDArray[np.float64 | np.int_]) -> npt.NDArray[np.float64]:
     :param array: input array,
     :return: vandermonde matrix
     """
+    return np.asarray(array.reshape(-1, 1)**np.arange(array.shape[0]).reshape(1, -1), dtype=np.float64)
