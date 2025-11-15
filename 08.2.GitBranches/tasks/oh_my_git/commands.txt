@@ -1,0 +1,14 @@
+git checkout fast_forward_recepient
+git merge fast_forward_sender
+
+git checkout automerge_recepient
+git merge automerge_sender
+
+git checkout conflict_recepient
+git merge conflict_sender
+git status
+git add hello_world.py
+git commit -m "Fixed merge conflict in hello_world.py, the name is taken from sender and the return value is taken from recepient"
+
+git checkout move_me_back
+git reset --hard 3814d4f
