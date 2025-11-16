@@ -3,6 +3,14 @@ version: 1
 structure:
   private_patterns: ["simple_pass_manager"]
 
+parameters:
+  allow_change: [
+    "**/pyproject.toml",
+    "**/setup.cfg",
+    "**/setup.py",
+  ]
+
+
 # settings for Tester, uses .checker.yml and `params` and each task params (in .task.yml)
 # run once per task
 task_pipeline:
