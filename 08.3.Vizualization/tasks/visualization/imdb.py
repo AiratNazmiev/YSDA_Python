@@ -4,13 +4,11 @@ def wins_correlation() -> str:
     """
     return "nrOfNominations"
 
-
 def imdb_rating_by_time() -> tuple[str, int]:
     """
     Return tuple with trend ("ascending" or "descending") and start of 10 year period with maximum mean rating.
     """
     return "descending", 1920
-
 
 def genre_ratings() -> tuple[str, str]:
     """
@@ -30,7 +28,6 @@ def short_movie_year() -> int:
     Return start of 10 year period with maximum share of short movies (< 1 hour)
     """
     return 2010
-
 
 def movie_reviews() -> str:
     """
