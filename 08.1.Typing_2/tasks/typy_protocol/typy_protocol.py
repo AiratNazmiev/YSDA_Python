@@ -4,7 +4,7 @@ T_co = TypeVar("T_co", covariant=True)
 
 
 class Gettable(Protocol[T_co]):
-    def __getitem__(self, index: int) -> T_co:
+    def __getitem__(self, item: int) -> T_co:
         ...
 
     def __len__(self) -> int:
