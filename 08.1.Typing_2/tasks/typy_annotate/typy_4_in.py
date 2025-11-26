@@ -1,6 +1,30 @@
+from typing import Optional, TypeVar, Protocol, overload, Container
+
+T = TypeVar("T")
 
 
-def f(a, b):
+class ContainsAll(Protocol):
+    def __contains__(self, a: object) -> bool:
+        ...
+
+@overload
+def f(a: list[int], b: int) -> Optional[int]:
+    ...
+
+
+@overload
+def f(a: set[int], b: int) -> Optional[int]:
+    ...
+
+@overload
+def f(a: str, b: str) -> Optional[str]:
+    ...
+
+@overload
+def f(a: ContainsAll, b: T) -> Optional[T]:
+    ...
+
+def f(a: Container[object], b: T) -> Optional[T]:
     return b if b in a else None
 
 

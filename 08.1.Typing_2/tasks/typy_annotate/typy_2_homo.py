@@ -1,8 +1,12 @@
+from typing import Optional, overload
 
+@overload
+def f(a: tuple[int, ...]) -> Optional[int]: ...
+@overload
+def f(a: tuple[float, ...]) -> Optional[float]: ...
 
-def f(a):
+def f(a: tuple[int, ...]) -> Optional[int]:
     return a[0] if a else None
-
 
 TEST_SAMPLES = """
 # SUCCESS

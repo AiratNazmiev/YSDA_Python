@@ -1,7 +1,5 @@
-
-def f(a):
+def f(a: float) -> float:
     return a / 2
-
 
 TEST_SAMPLES = """
 # ERROR

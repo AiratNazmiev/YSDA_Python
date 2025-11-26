@@ -1,6 +1,11 @@
+from typing import Callable
 
-
-def f(a, b, c, d):
+def f(
+    a: Callable[[float, float, complex], float],
+    b: float,
+    c: float,
+    d: complex,
+) -> float:
     return a(b, c, d)
 
 

@@ -1,6 +1,10 @@
+from typing import TypeVar, Tuple
+from collections.abc import Sized, Sequence
+
+TStrLike = TypeVar("TStrLike", bound=str)
 
 
-def f(a):
+def f(a: Tuple[Sized, TStrLike, Sequence[str]]) -> TStrLike:
     return a[1]
 
 
