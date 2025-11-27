@@ -140,6 +140,7 @@ class Join(Operation):
                     key_a_vals = ()
                     group_a = iter(())
             elif key_b_vals < key_a_vals:
+                # key only in B
                 yield from self._joiner(self._keys, iter(()), group_b)
                 try:
                     key_b_vals, group_b = next(iter_b)
@@ -148,6 +149,7 @@ class Join(Operation):
                     key_b_vals = ()
                     group_b = iter(())
             else:
+                # same key in both
                 yield from self._joiner(self._keys, group_a, group_b)
                 try:
                     key_a_vals, group_a = next(iter_a)
@@ -162,6 +164,7 @@ class Join(Operation):
                     key_b_vals = ()
                     group_b = iter(())
 
+        # leftovers in A
         while not a_finished:
             yield from self._joiner(self._keys, group_a, iter(()))
             try:
@@ -171,6 +174,7 @@ class Join(Operation):
                 key_a_vals = ()
                 group_a = iter(())
 
+        # leftovers in B
         while not b_finished:
             yield from self._joiner(self._keys, iter(()), group_b)
             try:
@@ -242,12 +246,46 @@ class Split(Mapper):
         self._separator = separator
 
     def __call__(self, row: TRow) -> TRowsGenerator:
-        value = row[self._column]
-        parts = str(value).split(self._separator)
-        for part in parts:
+        s = str(row[self._column])
+
+        if self._separator is None:
+            length = len(s)
+            i = 0
+            while i < length:
+                while i < length and s[i].isspace():
+                    i += 1
+                if i >= length:
+                    break
+                j = i
+                while j < length and not s[j].isspace():
+                    j += 1
+                token = s[i:j]
+                new_row = row.copy()
+                new_row[self._column] = token
+                yield new_row
+                i = j
+            return
+
+        sep = self._separator
+        if sep == '':
+            raise ValueError("empty separator")
+
+        sep_len = len(sep)
+        start = 0
+        while True:
+            idx = s.find(sep, start)
+            if idx == -1:
+                # last piece
+                token = s[start:]
+                new_row = row.copy()
+                new_row[self._column] = token
+                yield new_row
+                break
+            token = s[start:idx]
             new_row = row.copy()
-            new_row[self._column] = part
+            new_row[self._column] = token
             yield new_row
+            start = idx + sep_len
 
 
 class Product(Mapper):
@@ -452,7 +490,6 @@ def _merge_rows(
             del result[key_b]
             result[key_b + suffix_a] = val_a
             result[key_b + suffix_b] = val_b
-
     return result
 
 
