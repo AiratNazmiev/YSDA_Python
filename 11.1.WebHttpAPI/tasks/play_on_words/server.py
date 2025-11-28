@@ -28,7 +28,7 @@ class GameHandler(socketserver.StreamRequestHandler):
         print(f'Connected: {client}')
         try:
             while True:
-                command = self.rfile.readline().decode('utf-8').rstrip()
+                self.rfile.readline().decode('utf-8').rstrip()
                 self._send('PLAYER_VICTORY')
         except Exception as e:
             print('Exception', e)

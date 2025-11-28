@@ -17,6 +17,7 @@ def run_socket_server(filename: str | Path, *args: tp.Any) -> Generator[None, No
     proc = subprocess.Popen(
         ['python', filename, *args],
     )
+    print("ok")
     try:
         time.sleep(0.5)  # a little sleep in order for the server to rise
         yield
