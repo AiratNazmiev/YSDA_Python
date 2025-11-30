@@ -16,6 +16,7 @@ def get_pickle_version(data: bytes) -> PickleVersion:
     :return: protocol version.
     """
     version = next(pickletools.genops(data))[1]
+
     if version is None or version < 2:
         version = -1
         is_new_format = False
