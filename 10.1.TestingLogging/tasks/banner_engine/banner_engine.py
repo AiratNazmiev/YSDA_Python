@@ -37,7 +37,6 @@ class BannerStat:
         """
         if self.shows == 0:
             return default_ctr
-        # bugfix: previously used shows / clicks
         return self.clicks / self.shows
 
 
@@ -62,6 +61,7 @@ class Banner:
 
 class BannerStorage:
     def __init__(self, banners: typing.Iterable[Banner], default_ctr: float = 0.1):
+        # materialize iterable once
         banners_list = list(banners)
         self._banner_dict = {b.banner_id: b for b in banners_list}
         self._banner_id_list = [b.banner_id for b in banners_list]
@@ -114,7 +114,12 @@ class BannerStorage:
 
     def print_stats(self) -> None:
         for b in self._banner_dict.values():
-            print("Id:", b.banner_id, "Cost", b.cost, "Shows", b.stat.shows, "Clicks", b.stat.clicks)
+            print(
+                "Id:", b.banner_id,
+                "Cost", b.cost,
+                "Shows", b.stat.shows,
+                "Clicks", b.stat.clicks,
+            )
 
 
 class EpsilonGreedyBannerEngine:

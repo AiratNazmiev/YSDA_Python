@@ -2,14 +2,14 @@ import typing
 
 import pytest
 
-from .banner_engine import (
+from banner_engine import (
     BannerStat,
     Banner,
     BannerStorage,
     EpsilonGreedyBannerEngine,
     EmptyBannerStorageError,
 )
-from . import banner_engine as banner_engine_module
+import banner_engine
 
 TEST_DEFAULT_CTR = 0.1
 
@@ -24,7 +24,14 @@ def test_banners() -> list[Banner]:
     ]
 
 
-@pytest.mark.parametrize("clicks, shows, expected_ctr", [(1, 1, 1.0), (20, 100, 0.2), (5, 100, 0.05)])
+@pytest.mark.parametrize(
+    "clicks, shows, expected_ctr",
+    [
+        (1, 1, 1.0),
+        (20, 100, 0.2),
+        (5, 100, 0.05),
+    ],
+)
 def test_banner_stat_ctr_value(clicks: int, shows: int, expected_ctr: float) -> None:
     stat = BannerStat(clicks, shows)
     ctr = stat.compute_ctr(TEST_DEFAULT_CTR)
@@ -57,7 +64,9 @@ def test_banner_stat_add_click_increases_ctr() -> None:
     assert ctr_after > ctr_before
 
 
-def test_get_banner_with_highest_cpc_returns_banner_with_highest_cpc(test_banners: list[Banner]) -> None:
+def test_get_banner_with_highest_cpc_returns_banner_with_highest_cpc(
+    test_banners: list[Banner],
+) -> None:
     storage = BannerStorage(test_banners, default_ctr=TEST_DEFAULT_CTR)
 
     def cpc(b: Banner) -> float:
@@ -83,6 +92,7 @@ def test_engine_send_click_not_fails_on_unknown_banner(test_banners: list[Banner
     total_cost_before = engine.total_cost
     clicks_before = {b.banner_id: b.stat.clicks for b in test_banners}
 
+
     engine.send_click("unknown_banner")
 
     clicks_after = {b.banner_id: b.stat.clicks for b in test_banners}
@@ -92,7 +102,6 @@ def test_engine_send_click_not_fails_on_unknown_banner(test_banners: list[Banner
 
 def test_engine_with_zero_random_probability_shows_banner_with_highest_cpc(
     test_banners: list[Banner],
-    monkeypatch: typing.Any,
 ) -> None:
     storage = BannerStorage(test_banners, default_ctr=TEST_DEFAULT_CTR)
 
@@ -102,13 +111,17 @@ def test_engine_with_zero_random_probability_shows_banner_with_highest_cpc(
     best_banner = max(test_banners, key=cpc)
     non_best_banner = next(b for b in test_banners if b.banner_id != best_banner.banner_id)
 
+    original_random_banner = BannerStorage.random_banner
+
     def fake_random_banner(self: BannerStorage) -> Banner:
         return non_best_banner
 
-    monkeypatch.setattr(banner_engine_module.BannerStorage, "random_banner", fake_random_banner)
-
-    engine = EpsilonGreedyBannerEngine(storage, random_banner_probability=0.0)
-    shown_banner_id = engine.show_banner()
+    try:
+        BannerStorage.random_banner = fake_random_banner  # type: ignore
+        engine = EpsilonGreedyBannerEngine(storage, random_banner_probability=0.0)
+        shown_banner_id = engine.show_banner()
+    finally:
+        BannerStorage.random_banner = original_random_banner  # type: ignore
 
     assert shown_banner_id == best_banner.banner_id
 
@@ -124,7 +137,7 @@ def test_engine_with_1_random_banner_probability_gets_random_banner(
     def fake_choice(seq: list[str]) -> str:
         return expected_random_banner
 
-    monkeypatch.setattr(banner_engine_module.random, "choice", fake_choice)
+    monkeypatch.setattr(banner_engine.random, "choice", fake_choice)
 
     engine = EpsilonGreedyBannerEngine(storage, random_banner_probability=1.0)
     shown_banner_id = engine.show_banner()
