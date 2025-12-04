@@ -19,7 +19,8 @@ class BannerStat:
         self._clicks += 1
 
     def add_show(self) -> None:
-        self._clicks += 1
+        # bugfix: previously incremented _clicks instead of _shows
+        self._shows += 1
 
     @property
     def clicks(self) -> int:
@@ -36,12 +37,12 @@ class BannerStat:
         """
         if self.shows == 0:
             return default_ctr
-        else:
-            return self.shows / self.clicks
+        # bugfix: previously used shows / clicks
+        return self.clicks / self.shows
 
 
 class Banner:
-    def __init__(self, banner_id: str, cost: int, stat: BannerStat | None = None):
+    def __init__(self, banner_id: str, cost: int, stat: "BannerStat | None" = None):
         self._banner_id = banner_id
         self._cost = cost
         self._stat = stat if stat is not None else BannerStat(0, 0)
@@ -61,20 +62,22 @@ class Banner:
 
 class BannerStorage:
     def __init__(self, banners: typing.Iterable[Banner], default_ctr: float = 0.1):
-        self._banner_dict = {b.banner_id: b for b in banners}
-        self._banner_id_list = [b.banner_id for b in banners]
+        banners_list = list(banners)
+        self._banner_dict = {b.banner_id: b for b in banners_list}
+        self._banner_id_list = [b.banner_id for b in banners_list]
         self._default_ctr = default_ctr
 
     def is_empty(self) -> bool:
         return len(self._banner_dict) == 0
 
     def add_click(self, banner_id: str) -> None:
+        if banner_id not in self._banner_dict:
+            raise NoBannerError("Unknown banner {}!".format(banner_id))
         self._banner_dict[banner_id].stat.add_click()
 
     def add_show(self, banner_id: str) -> None:
         if banner_id not in self._banner_dict:
             raise NoBannerError("Unknown banner {}!".format(banner_id))
-
         self._banner_dict[banner_id].stat.add_show()
 
     def get_banner(self, banner_id: str) -> Banner:
@@ -89,7 +92,7 @@ class BannerStorage:
         """
 
         if self.is_empty():
-            raise NoBannerError("Storage is empty!")
+            raise EmptyBannerStorageError("Storage is empty!")
 
         selected_banner = self._banner_dict[self._banner_id_list[0]]
         selected_cpc = selected_banner.stat.compute_ctr(self._default_ctr) * selected_banner.cost
@@ -105,7 +108,7 @@ class BannerStorage:
 
     def random_banner(self) -> Banner:
         if self.is_empty():
-            raise NoBannerError("Storage is empty!")
+            raise EmptyBannerStorageError("Storage is empty!")
 
         return self._banner_dict[random.choice(self._banner_id_list)]
 
@@ -124,6 +127,9 @@ class EpsilonGreedyBannerEngine:
         :param banner_storage: None empty banner storage
         :param random_banner_probability: 1.0 - every show is random. 0.0 - every show is greedy
         """
+        if banner_storage.is_empty():
+            raise EmptyBannerStorageError("Banner storage is empty!")
+
         self._epsilon = random_banner_probability
         self._storage = banner_storage
 
@@ -135,7 +141,7 @@ class EpsilonGreedyBannerEngine:
         Engine is asked to show banner.
         Engine selects banner with epsilon-greedy algorithms and updates banner show statistics.
         """
-        if random.random() > self._epsilon:
+        if random.random() < self._epsilon:
             selected_banner = self._storage.random_banner()
         else:
             selected_banner = self._storage.banner_with_highest_cpc()
@@ -151,7 +157,9 @@ class EpsilonGreedyBannerEngine:
         Important! Web page can send incorrect `banner_id`. Engine must not fail in that case!
         """
         try:
-            self._storage.add_show(banner_id)
+            banner = self._storage.get_banner(banner_id)
+            self._storage.add_click(banner_id)
+            self._total_cost += banner.cost
         except NoBannerError:
             pass
 
