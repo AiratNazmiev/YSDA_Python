@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compgraph"
+description = "small compgraph lib"
+authors = [
+    {name = "Airat Nazmiev", email = "airat.nazmiev@yandex.ru"}
+]
+version = "0.0.1"
+readme = "LIB_README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "click"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["compgraph"]
