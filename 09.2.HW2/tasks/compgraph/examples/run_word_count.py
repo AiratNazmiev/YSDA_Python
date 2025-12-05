@@ -1,22 +1,31 @@
+import json
+from pathlib import Path
+
 import click
 
 from compgraph.algorithms import word_count_graph
 
 
-# TODO: cli
-# You can use anything you want. We suggest you to use `click`
-def main() -> None:
-    graph = word_count_graph(input_stream_name="input", text_column='text', count_column='count')
+@click.command()
+@click.argument("input_stream_name", nargs=1)
+@click.argument("output_stream_name", nargs=1)
+def word_count(input_stream_name: str, output_stream_name: str) -> None:
+    """Count words in the input JSON and write results to the output JSON."""
+    input_path = Path(input_stream_name).resolve()
+    output_path = Path(output_stream_name).resolve()
 
-    input_filepath = None
-    output_filepath = None
+    graph = word_count_graph(
+        input_stream_name=str(input_path),
+        text_column="text",
+        count_column="count",
+        file=True,
+    )
 
-    result = graph.run(input=lambda: input_filepath)
-    # pyrefly: ignore  # no-matching-overload
-    with open(output_filepath, "w") as out:
-        for row in result:
-            print(row, file=out)
+    result = list(graph.run())
+
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(result, f)
 
 
 if __name__ == "__main__":
-    main()
+    word_count()
