@@ -9,20 +9,11 @@ def python_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
-    file_in_path = Path(file_in)
-    file_out_path = Path(file_out)
+    lines = map(lambda x: x.split("\t"), file_in.read_text().splitlines())
+    lines_sorted = sorted(lines, key=lambda x: (int(x[1]), x[0]) )
 
-    with file_in_path.open("r", encoding="utf-8", newline="") as f_in:
-        lines = f_in.readlines()
-
-    def sort_key(line: str) -> tuple[int, str]:
-        first, second = line.rstrip("\n").split("\t", 1)
-        return int(second), first
-
-    lines.sort(key=sort_key)
-
-    with file_out_path.open("w", encoding="utf-8", newline="") as f_out:
-        f_out.writelines(lines)
+    with open(file_out, 'w') as f:
+        f.write(''.join([f"{row[0]}\t{row[1]}\n" for row in lines_sorted]) + '\n')
 
 def util_sort(file_in: Path, file_out: Path) -> None:
     """
@@ -30,20 +21,6 @@ def util_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
-    file_in_path = Path(file_in)
-    file_out_path = Path(file_out)
-
-    cmd = [
-        "sort",
-        "-t",
-        "\t",
-        "-k2,2n",
-        "-k1,1",
-        str(file_in_path),
-    ]
-
-    env = os.environ.copy()
-    env.setdefault("LC_ALL", "C")
-
-    with file_out_path.open("w", encoding="utf-8", newline="") as f_out:
-        subprocess.run(cmd, check=True, stdout=f_out, env=env)
+    cmd = ["sort", "-t", "\t", "-k2,2n", "-k1,1"]
+    with file_in.open("r") as fin, file_out.open("w") as fout:
+        subprocess.run(cmd, stdin=fin, stdout=fout, stderr=subprocess.PIPE, check=True)
