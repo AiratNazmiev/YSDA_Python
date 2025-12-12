@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import subprocess
 
 
@@ -8,16 +9,20 @@ def python_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
-    lines = file_in.read_text(encoding="utf-8").splitlines()
+    file_in_path = Path(file_in)
+    file_out_path = Path(file_out)
 
-    def key_func(line: str) -> tuple[int, str]:
-        first_col, second_col = line.split("\t", 1)
-        return int(second_col), first_col
+    with file_in_path.open("r", encoding="utf-8", newline="") as f_in:
+        lines = f_in.readlines()
 
-    lines.sort(key=key_func)
+    def sort_key(line: str) -> tuple[int, str]:
+        first, second = line.rstrip("\n").split("\t", 1)
+        return int(second), first
 
-    file_out.write_text("".join(f"{line}\n" for line in lines))
+    lines.sort(key=sort_key)
 
+    with file_out_path.open("w", encoding="utf-8", newline="") as f_out:
+        f_out.writelines(lines)
 
 def util_sort(file_in: Path, file_out: Path) -> None:
     """
@@ -25,7 +30,20 @@ def util_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
-    cmd = ["sort", "-t", "\t", "-k2,2n", "-k1,1", str(file_in)]
+    file_in_path = Path(file_in)
+    file_out_path = Path(file_out)
 
-    with file_out.open("w", newline="") as fout:
-        subprocess.run(cmd, stdout=fout, check=True)
+    cmd = [
+        "sort",
+        "-t",
+        "\t",
+        "-k2,2n",
+        "-k1,1",
+        str(file_in_path),
+    ]
+
+    env = os.environ.copy()
+    env.setdefault("LC_ALL", "C")
+
+    with file_out_path.open("w", encoding="utf-8", newline="") as f_out:
+        subprocess.run(cmd, check=True, stdout=f_out, env=env)
