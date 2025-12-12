@@ -1,59 +1,85 @@
+import json
 import typing as tp
 
+from . import external_sort as ext_sort
 from . import operations as ops
 
 
 class Graph:
-    """Computational graph implementation"""
+    """Simple computational graph with chainable operations."""
+
+    def __init__(self) -> None:
+        self.op: tp.Any = None
 
     @staticmethod
-    def graph_from_iter(name: str) -> 'Graph':
-        """Construct new graph which reads data from row iterator (in form of sequence of Rows
-        from 'kwargs' passed to 'run' method) into graph data-flow
-        Use ops.ReadIterFactory
-        :param name: name of kwarg to use as data source
-        """
-        raise NotImplementedError
+    def make_graph(input_stream_name: str, file: bool = False) -> "Graph":
+        """Create graph reading from iterator (`run` kwarg) or JSON file."""
+        if file:
+            return Graph.graph_from_file(input_stream_name, json.loads)
+        return Graph.graph_from_iter(input_stream_name)
 
     @staticmethod
-    def graph_from_file(filename: str, parser: tp.Callable[[str], ops.TRow]) -> 'Graph':
-        """Construct new graph extended with operation for reading rows from file
-        Use ops.Read
-        :param filename: filename to read from
-        :param parser: parser from string to Row
-        """
-        raise NotImplementedError
+    def graph_from_iter(name: str) -> "Graph":
+        """Create graph that reads from an iterator passed as `name` to `run`."""
+        graph = Graph()
+        graph.op = ops.ReadIterFactory(name)
+        return graph
 
-    # If you would like to implement __init__ and/or @classmethods instead of methods above,
-    #  feel free to do so. However, the __init__ method should not accept any arguments.
+    @staticmethod
+    def graph_from_file(
+        filename: str,
+        parser: tp.Callable[[str], ops.TRow],
+    ) -> "Graph":
+        """Create graph that reads rows from a file using `parser`."""
+        graph = Graph()
+        graph.op = ops.Read(filename, parser)
+        return graph
 
-    def map(self, mapper: ops.Mapper) -> 'Graph':
-        """Construct new graph extended with map operation with particular mapper
-        :param mapper: mapper to use
-        """
-        raise NotImplementedError
+    def map(self, mapper: ops.Mapper) -> "Graph":
+        """Return new graph with a map step added."""
+        graph = Graph()
+        graph.op = ops.AddOperation(ops.Map(mapper), self.op)
+        return graph
 
-    def reduce(self, reducer: ops.Reducer, keys: tp.Sequence[str]) -> 'Graph':
-        """Construct new graph extended with reduce operation with particular reducer
-        :param reducer: reducer to use
-        :param keys: keys for grouping
-        """
-        raise NotImplementedError
+    def reduce(self, reducer: ops.Reducer, keys: tp.Sequence[str]) -> "Graph":
+        """Return new graph with a reduce step added."""
+        graph = Graph()
+        graph.op = ops.AddOperation(ops.Reduce(reducer, keys), self.op)
+        return graph
 
-    def sort(self, keys: tp.Sequence[str]) -> 'Graph':
-        """Construct new graph extended with sort operation
-        :param keys: sorting keys (typical is tuple of strings)
-        """
-        raise NotImplementedError
+    def sort(self, keys: tp.Sequence[str]) -> "Graph":
+        """Return new graph with an external sort step added."""
+        graph = Graph()
+        graph.op = ops.AddOperation(ext_sort.ExternalSort(keys), self.op)
+        return graph
 
-    def join(self, joiner: ops.Joiner, join_graph: 'Graph', keys: tp.Sequence[str]) -> 'Graph':
-        """Construct new graph extended with join operation with another graph
-        :param joiner: join strategy to use
-        :param join_graph: other graph to join with
-        :param keys: keys for grouping
-        """
-        raise NotImplementedError
+    def join(
+        self,
+        joiner: ops.Joiner,
+        join_graph: "Graph",
+        keys: tp.Sequence[str],
+    ) -> "Graph":
+        """Return new graph that joins this graph with `join_graph`."""
+        join_operation = ops.Join(joiner, keys)
+        left_graph = self
+        right_graph = join_graph
+
+        def op(*args: tp.Any, **kwargs: tp.Any) -> ops.TRowsGenerator:
+            left_rows = left_graph.run(**kwargs)
+            right_rows = right_graph.run(**kwargs)
+            yield from join_operation(left_rows, right_rows)
+
+        graph = Graph()
+        graph.op = op
+        return graph
 
     def run(self, **kwargs: tp.Any) -> ops.TRowsIterable:
-        """Single method to start execution; data sources passed as kwargs"""
-        raise NotImplementedError
+        """
+        Execute the graph.
+
+        Sources are passed as keyword arguments: each value should be a
+        zero-argument callable returning an iterator of rows.
+        """
+        if self.op is None:
+            raise RuntimeError("Graph has no root operation defined.")
+        yield from self.op(**kwargs)
