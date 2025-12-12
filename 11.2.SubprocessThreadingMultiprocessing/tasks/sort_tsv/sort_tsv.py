@@ -24,5 +24,10 @@ def util_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
-    with open(file_out, 'w') as f:
-        subprocess.call(["sort", "-k2n", "-k1", file_in], stdout=f)
+    cmd = ["sort", "-t", "\t", "-k2,2n", "-k1,1"]
+
+    env = dict(**__import__("os").environ)
+    env["LC_ALL"] = "C"
+
+    with file_in.open("rb") as fin, file_out.open("wb") as fout:
+        subprocess.run(cmd, stdin=fin, stdout=fout, stderr=subprocess.PIPE, check=True, env=env)
