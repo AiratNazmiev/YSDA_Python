@@ -8,7 +8,7 @@ def python_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
-    lines = map( lambda x: x.split(), file_in.read_text(encoding="utf-8").splitlines())
+    lines = map(lambda x: x.split(), file_in.read_text(encoding="utf-8").splitlines())
     lines_sorted = sorted(
         lines,
         key=lambda x: (int(x[1]), x[0])
