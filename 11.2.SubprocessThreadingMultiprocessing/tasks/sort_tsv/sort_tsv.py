@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import os
 
 
 def python_sort(file_in: Path, file_out: Path) -> None:
@@ -24,11 +25,14 @@ def util_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
+    env = dict(os.environ)
+    env["LC_ALL"] = "C"
+
     subprocess.run(
         [
             "sort",
             "-t",
-            r"\t",
+            "\t",
             "-k2,2n",
             "-k1,1",
             "-o",
@@ -36,4 +40,5 @@ def util_sort(file_in: Path, file_out: Path) -> None:
             str(file_in),
         ],
         check=True,
+        env=env,
     )
