@@ -9,11 +9,16 @@ def python_sort(file_in: Path, file_out: Path) -> None:
     :param file_in: tsv file to read from
     :param file_out: tsv file to write to
     """
-    lines = map(lambda x: x.split("\t"), file_in.read_text().splitlines())
-    lines_sorted = sorted(lines, key=lambda x: (int(x[1]), x[0]) )
+    rows: list[tuple[str, int]] = []
+    for line in file_in.read_text(encoding="utf-8").splitlines():
+        first, second = line.split("\t", 1)
+        rows.append((first, int(second)))
 
-    with open(file_out, 'w') as f:
-        f.write(''.join([f"{row[0]}\t{row[1]}\n" for row in lines_sorted]) + '\n')
+    rows.sort(key=lambda r: (r[1], r[0]))
+
+    with file_out.open("w", newline="") as f_out:
+        for first, second in rows:
+            f_out.write(f"{first}\t{second}\n")
 
 def util_sort(file_in: Path, file_out: Path) -> None:
     """
