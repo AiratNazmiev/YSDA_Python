@@ -1,6 +1,5 @@
 from pathlib import Path
 import subprocess
-import os
 
 
 def python_sort(file_in: Path, file_out: Path) -> None:
@@ -27,5 +26,5 @@ def util_sort(file_in: Path, file_out: Path) -> None:
     """
     cmd = ["sort", "-t", "\t", "-k2,2n", "-k1,1", str(file_in)]
 
-    with file_out.open("w", encoding="utf-8", newline="") as f:
+    with open(file_out, "w") as f:
         subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, check=True)
